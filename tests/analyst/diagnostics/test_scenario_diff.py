@@ -1,3 +1,5 @@
+import pytest
+
 from analyst.diagnostics.scenario_diff import ScenarioDiff, diff_top_scenarios
 from engine.types import PatternKind
 from tests.analyst._helpers import make_scenario
@@ -51,11 +53,12 @@ def test_diff_carries_family_and_relative_probability():
     diffs = diff_top_scenarios([sc1, sc2, sc3])
     assert len(diffs) == 2
     assert diffs[0].primary_family == "5W_SIDEWAY"
-    assert diffs[0].primary_probability == 0.6
+    # approx: probability is score/sum, and 0.6+0.3+0.1 != 1.0 in float (version-dependent).
+    assert diffs[0].primary_probability == pytest.approx(0.6)
     assert diffs[0].competitor_family == "3W"
-    assert diffs[0].competitor_probability == 0.3
+    assert diffs[0].competitor_probability == pytest.approx(0.3)
     assert diffs[1].competitor_family == "5W_TREND"
-    assert abs(diffs[1].competitor_probability - 0.1) < 1e-9
+    assert diffs[1].competitor_probability == pytest.approx(0.1)
 
 
 def test_diff_probability_safe_when_scores_absent():
