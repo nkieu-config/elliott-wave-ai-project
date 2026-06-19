@@ -36,6 +36,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Drop root: code stays root-owned (read-only); only the cache dir needs writing.
 RUN addgroup --system app && adduser --system --ingroup app app \
     && mkdir -p /app/data && chown app:app /app/data
+
+ENV EWL_CACHE_DIR=/app/data/.cache
 USER app
 
 EXPOSE 8000
