@@ -9,10 +9,11 @@ import logging
 import time
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from apps.api import pipeline_ops
+from apps.api.middleware import RELEASE_SCOPE_KEY
 from apps.api.schemas import AnalystStreamRequest
 from apps.api.services import analyst_service
 from engine import Bar, Scenario
@@ -30,7 +31,7 @@ _MODE_TO_ANALYST: dict[str, str] = {
 
 
 @router.post("/analyst/stream")
-async def analyst_stream(req: AnalystStreamRequest) -> StreamingResponse:
+async def analyst_stream(req: AnalystStreamRequest, request: Request) -> StreamingResponse:
     """Server-Sent Events stream of an analyst narration.
 
     Event types:
@@ -82,6 +83,11 @@ async def analyst_stream(req: AnalystStreamRequest) -> StreamingResponse:
                 force_refresh=pipeline_ops.effective_force_refresh(req.force_refresh),
             )
             gen_ms = (time.perf_counter() - t_gen0) * 1000.0
+            # Heavy work is done — free the concurrency slot so the paced
+            # playback below doesn't hold capacity against other requests.
+            release_slot = request.scope.get(RELEASE_SCOPE_KEY)
+            if release_slot is not None:
+                release_slot()
             # Skip pacing for pre-resolved text (cache hit / fallback): the
             # typewriter would falsely imply a live LLM.
             is_pre_resolved = bool(output.cached or output.fell_back)

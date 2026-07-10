@@ -14,9 +14,21 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from apps.api.middleware import ConcurrencyLimitMiddleware, SecurityHeadersMiddleware
 from apps.api.routers import analyst, health, pipeline, qa
 from apps.api.services import analyst_service
 from engine.logging_config import configure_logging
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        _log.warning("%s=%r is not an int; using default %d", name, raw, default)
+        return default
 
 configure_logging()
 _log = logging.getLogger(__name__)
@@ -79,7 +91,13 @@ elif _IS_PRODUCTION:
     )
 else:
     _cors_kwargs["allow_origin_regex"] = _DEV_ORIGIN_REGEX
+
+# Added inner→outer: the concurrency 503 still exits through CORS + security headers,
+# so a browser can read it and it carries the hardening headers.
+_MAX_CONCURRENCY = _int_env("EWL_API_MAX_CONCURRENCY", 8)
+app.add_middleware(ConcurrencyLimitMiddleware, limit=_MAX_CONCURRENCY)
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
+app.add_middleware(SecurityHeadersMiddleware, hsts=_IS_PRODUCTION)
 
 app.include_router(health.router)
 app.include_router(pipeline.router)
