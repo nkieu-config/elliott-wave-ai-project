@@ -41,6 +41,10 @@ jobs:
       - name: Test
         run: uv run pytest --cov
 
+      # Known-vulnerability scan of the resolved dependency tree.
+      - name: Audit dependencies
+        run: uvx pip-audit
+
   web:
     name: Web — tsc + eslint + vitest
     runs-on: ubuntu-latest
@@ -70,3 +74,22 @@ jobs:
 
       - name: Test
         run: npm run test
+
+      # Gate on high/critical only: the moderate advisories are transitive dev-only
+      # and their fixes are breaking-change bumps.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+  docker:
+    name: Docker — compose build (README quick-start)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # The README's headline command is `docker compose up --build`; build both
+      # images so a broken Dockerfile / lockfile drift fails CI, not a first-time user.
+      - name: Validate compose file
+        run: docker compose config -q
+
+      - name: Build images
+        run: docker compose build

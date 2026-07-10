@@ -13,6 +13,9 @@ services:
       # Chart / score / KPI work without a key; only AI Reading + Ask need one.
       # Picked up from your shell or the project .env if present, else empty.
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+    init: true
+    mem_limit: 2g
+    cpus: 2
     restart: unless-stopped
 
   web:
@@ -26,5 +29,9 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api                           # start order only (not readiness)
+      api:
+        condition: service_healthy    # wait for the API healthcheck, not just start order
+    init: true
+    mem_limit: 512m
+    cpus: 1
     restart: unless-stopped
