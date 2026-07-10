@@ -74,7 +74,9 @@ def to_scenario(
 
     assign_degree_labels(root_node)
     if open_subtree is not None:
-        assign_degree_labels(open_subtree)
+        # The open subtree is a root-child leg, so its own children start one degree
+        # below the root (SECONDARY), matching a closed sibling leg's sub-waves.
+        assign_degree_labels(open_subtree, children_level=1)
 
     open_state = OpenState(
         current_role=top_ctx.next_role,

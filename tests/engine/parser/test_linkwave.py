@@ -220,9 +220,10 @@ def test_link_t_r7_next_group_s1_must_exceed_prior_link() -> None:
             _Leg(role=WaveRole.S3, span_start=g1_segs[2].start, span_end=g1_segs[2].end),
         ],
     )
-    # link_1: 145→130 (Pull, len 15 within R8 of g1.s3=30)
+    # link_1: 145→130 (Pull, len 15 within R8 of g1.s3=30); +6 bars satisfies both
+    # R9 (link time >2× the ~1-bar sub-legs) and the Gann band (≤3× the ~3-bar set).
     link1_start = g1_segs[-1].end
-    link1_end = piv(link1_start.index + 1, 130, "low")
+    link1_end = piv(link1_start.index + 6, 130, "low")
     link1 = _Leg(role=WaveRole.LINK, span_start=link1_start, span_end=link1_end)
 
     # set_2 3W up: s1=35 (>15 ok R7), s2=20, s3=35 (span 130→180)
@@ -241,12 +242,13 @@ def test_link_t_r7_next_group_s1_must_exceed_prior_link() -> None:
             _Leg(role=WaveRole.S3, span_start=g2_s2_end, span_end=g2_s3_end),
         ],
     )
-    # link_2: 180→165 (Pull, len 15 within R8 of g2.s3=35)
+    # link_2: 180→165 (Pull, len 15 within R8 of g2.s3=35); +6 bars (see link_1)
     link2_start = g2_s3_end
-    link2_end = piv(link2_start.index + 1, 165, "low")
+    link2_end = piv(link2_start.index + 6, 165, "low")
     link2 = _Leg(role=WaveRole.LINK, span_start=link2_start, span_end=link2_end)
 
-    # Parent verified at 2-group, final_kind=LINK_T blocks verifier re-run
+    # Valid 2-group LINK_T; growing to 3 groups re-runs the 5-leg verifier (final_kind
+    # is invalidated on leg append, so the fixture must be a genuine 3-group LINK_T).
     parent = _Context(
         family="LINK_T",
         legs=[group1, link1, group2, link2],
@@ -271,7 +273,7 @@ def test_link_t_r7_next_group_s1_must_exceed_prior_link() -> None:
     )
     h = _Hypothesis(id="t-r7-3grp", context_stack=[parent, closing_g3])
 
-    # Post-close legs=5 (complete) and final_kind preset means verifier wouldn't re-run.
+    # Bad set_3: the R7 gate rejects the close before the parent grows, so legs stay 4.
     ok = _close_top_into_parent(h, "linear")
     assert ok is False, (
         "LINK_T R7 must reject set_3 close when its s1 leg is not longer "

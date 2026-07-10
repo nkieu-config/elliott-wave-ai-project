@@ -191,3 +191,27 @@ def test_bootstrap_outside_bar_picks_larger_excess_down() -> None:
     )
     assert pivots[0].bar_index == 0
     assert pivots[0].price == 100
+
+
+def test_shrinking_threshold_keeps_true_swing_low() -> None:
+    # A per-bar threshold that shrinks mid-retracement can fire on a shallow late low
+    # (bar 4, low 82) while an earlier, deeper low (bar 3, low 80) never tripped its
+    # larger threshold. The emitted low pivot must be the true swing low, not the
+    # firing bar's.
+    from engine.pivot import _zigzag_core
+
+    bars = [
+        _bar(0, 50, 51, 50, 50),
+        _bar(1, 75, 100, 51, 100),
+        _bar(2, 99, 100, 98, 99),
+        _bar(3, 90, 100, 80, 90),
+        _bar(4, 91, 100, 82, 91),
+        _bar(5, 88, 95, 82, 88),
+        _bar(6, 77, 95, 60, 77),
+    ]
+    thresholds = {3: 0.25, 4: 0.15}
+    pivots = _zigzag_core(bars, lambda i: thresholds.get(i, 0.10))
+
+    lows = [(p.bar_index, p.price) for p in pivots if p.kind == "low"]
+    assert (3, 80.0) in lows
+    assert (4, 82.0) not in lows

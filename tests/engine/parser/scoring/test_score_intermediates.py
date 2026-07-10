@@ -65,3 +65,14 @@ def test_score_intermediates_normal_unaffected():
     sc = SimpleNamespace(root=_wave(children=list(_LEGS)), score_components={})
     inter = score_intermediates(sc, bars=None)["intermediates"]
     assert inter
+
+
+def test_score_intermediates_skips_open_leg_without_crashing():
+    # A Link-Wave's still-forming leg is merged into root.children with span_end=None.
+    # The length-based scorers would deref span_end and crash — the open leg must be
+    # dropped from the detail computation (would 500 /scenario/layer1 otherwise).
+    open_leg = _wave(start=_pv(9, 120, 9), end=None)
+    root = _wave(children=[*_LEGS, open_leg])
+    sc = SimpleNamespace(root=root, score_components={})
+    inter = score_intermediates(sc, bars=None)["intermediates"]
+    assert inter  # still scored from the three closed legs

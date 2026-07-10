@@ -73,6 +73,40 @@ def test_label_no_op_on_none() -> None:
     assign_degree_labels(None)
 
 
+def test_open_subtree_labels_children_secondary_and_never_none() -> None:
+    # #5/#6: the open subtree is a root-child leg (PRIMARY), so its waves are
+    # SECONDARY — and an open (pattern_kind=None) sub-wave's descendants must still
+    # be labeled rather than left None (which renders blank in the UI).
+    base = datetime(2020, 1, 1)
+
+    def p(i: int, price: float, kind: str) -> Pivot:
+        return Pivot(i, base + timedelta(weeks=i), price, kind, i)  # type: ignore[arg-type]
+
+    open_sub = WaveNode(
+        role=WaveRole.S3,
+        span_start=p(0, 100, "low"),
+        span_end=None,
+        pattern_kind=None,
+        children=[
+            WaveNode(role=WaveRole.S1, span_start=p(0, 100, "low"), span_end=p(1, 120, "high")),
+            WaveNode(
+                role=WaveRole.S2,
+                span_start=p(1, 120, "high"),
+                span_end=None,
+                pattern_kind=None,
+                children=[
+                    WaveNode(role=WaveRole.S1, span_start=p(1, 120, "high"), span_end=p(2, 110, "low")),
+                ],
+            ),
+        ],
+    )
+    assign_degree_labels(open_sub, children_level=1)
+
+    assert open_sub.degree_label == DegreeLabel.PRIMARY
+    assert all(c.degree_label == DegreeLabel.SECONDARY for c in open_sub.children)
+    assert open_sub.children[1].children[0].degree_label == DegreeLabel.MINOR
+
+
 def test_e2e_size_consistent_3w_completes_with_primary_labels() -> None:
     segs = make_segments([100, 130, 115, 145])
     report = count_waves(segs[0].start, segs, "linear")

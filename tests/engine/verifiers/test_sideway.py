@@ -45,12 +45,15 @@ def test_reject_not_5_segments() -> None:
         (100, 300, 100, 100, 50),
         (100, 80, 100, 30, 50),
         (100, 80, 60, 50, 5),
+        (100, 80, 70, 50, 120),
     ],
     ids=[
         "s2_too_small",
         "s2_too_large",
         "s4_too_small",
         "no_subtype_match",
+        # s3 contracts (r32=0.875) but s5 expands (r54=2.4) → matches no subtype → None.
+        "s3_contracts_s5_expands_deadzone",
     ],
 )
 def test_sideway_rejects(lengths) -> None:

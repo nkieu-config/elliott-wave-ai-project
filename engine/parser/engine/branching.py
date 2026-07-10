@@ -7,7 +7,7 @@ from engine.adaptive import (
 )
 from engine.degree import gann_band_ok
 from engine.parser.engine._helpers import _seg_to_leg
-from engine.parser.engine.closing import _close_top_into_parent, _try_finalize
+from engine.parser.engine.closing import _append_leg, _close_top_into_parent, _try_finalize
 from engine.parser.families import (
     KNOWN_SUB_FAMILIES,
     LINK_INNER_SET1_FAMILIES,
@@ -52,7 +52,7 @@ def _option_a_extend(
     if not gann_band_ok(ctx, new_leg, mode):
         return None
     h2 = h.clone()
-    h2.top.legs.append(new_leg)
+    _append_leg(h2.top, new_leg)
     if h2.top.is_complete and not _try_finalize(h2.top, mode):
         return None
     return h2

@@ -78,7 +78,7 @@ def _check_r3_link_size(
         if r < min_required:
             rules.append(
                 RuleResult(
-                    f"link_s.r3.link_min_size_{i}",
+                    f"link_s.r3.link_size_{i}",
                     False,
                     measured=r,
                     detail=f"required >= {min_required}",

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from functools import partial
 
 import pytest
 
-from engine.types import PatternKind
+from engine.types import PatternKind, Pivot, Segment
 from engine.verifiers import verify_5wave_trend
 from tests.fixtures import build_5w_trend_segments, make_segments
 
@@ -118,3 +119,50 @@ def test_r5_measured_below_1_when_s3_shorter_than_one_other_push() -> None:
     r5 = next(r for r in rules if r.id == "5wt.r5.s3_not_shortest")
     assert r5.passed is True
     assert r5.measured == pytest.approx(1.5)
+
+
+# ── r2/r3 push-pull rules: r1's alternation guard means these never fail through the
+# public verify(), so pin their logic directly with a non-alternating leg set. ──
+
+
+def _seg(i: int, p0: float, p1: float) -> Segment:
+    base = datetime(2024, 1, 1)
+    a = Pivot(index=i, time=base + timedelta(weeks=i), price=p0, kind="low", bar_index=i)
+    b = Pivot(index=i + 1, time=base + timedelta(weeks=i + 1), price=p1, kind="high", bar_index=i + 1)
+    return Segment(start=a, end=b)
+
+
+def test_r2_rejects_odd_leg_that_is_not_a_push() -> None:
+    from engine.verifiers.trend import _check_r2_odd_are_push
+    # trend=up (s1 up); s3 goes DOWN — an odd leg that isn't a push.
+    segs = [_seg(0, 100, 130), _seg(1, 130, 115), _seg(2, 115, 105),
+            _seg(3, 105, 120), _seg(4, 120, 160)]
+    [r] = _check_r2_odd_are_push(segs, "linear")
+    assert r.id == "5wt.r2.odd_are_push"
+    assert r.passed is False
+
+
+def test_r2_passes_when_all_odd_legs_push() -> None:
+    from engine.verifiers.trend import _check_r2_odd_are_push
+    segs = [_seg(0, 100, 130), _seg(1, 130, 115), _seg(2, 115, 175),
+            _seg(3, 175, 155), _seg(4, 155, 200)]
+    [r] = _check_r2_odd_are_push(segs, "linear")
+    assert r.passed is True
+
+
+def test_r3_rejects_even_leg_that_is_not_a_pull() -> None:
+    from engine.verifiers.trend import _check_r3_even_are_pull
+    # trend=up (s1 up); s2 goes UP — an even leg that isn't a pull.
+    segs = [_seg(0, 100, 130), _seg(1, 130, 145), _seg(2, 145, 120),
+            _seg(3, 120, 160), _seg(4, 160, 140)]
+    [r] = _check_r3_even_are_pull(segs, "linear")
+    assert r.id == "5wt.r3.even_are_pull"
+    assert r.passed is False
+
+
+def test_r3_passes_when_all_even_legs_pull() -> None:
+    from engine.verifiers.trend import _check_r3_even_are_pull
+    segs = [_seg(0, 100, 130), _seg(1, 130, 115), _seg(2, 115, 175),
+            _seg(3, 175, 155), _seg(4, 155, 200)]
+    [r] = _check_r3_even_are_pull(segs, "linear")
+    assert r.passed is True

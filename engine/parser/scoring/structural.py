@@ -9,6 +9,8 @@ from .helpers import _log_cv_score
 
 
 def _bar_span(leg: _Leg) -> int | None:
+    if leg.span_start is None or leg.span_end is None:
+        return None
     if leg.span_start.bar_index is None or leg.span_end.bar_index is None:
         return None
     return leg.span_end.bar_index - leg.span_start.bar_index

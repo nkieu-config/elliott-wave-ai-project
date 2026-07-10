@@ -21,6 +21,24 @@ __all__ = [
 ]
 
 
+def _lowest_low_idx(bars: list[Bar], after_idx: int, end_idx: int) -> int:
+    # Lowest low over (after_idx, end_idx]; falls back to end_idx for an outside-bar
+    # fire where the new high and the reversal land on the same bar.
+    lo = end_idx
+    for j in range(after_idx + 1, end_idx + 1):
+        if bars[j].low < bars[lo].low:
+            lo = j
+    return lo
+
+
+def _highest_high_idx(bars: list[Bar], after_idx: int, end_idx: int) -> int:
+    hi = end_idx
+    for j in range(after_idx + 1, end_idx + 1):
+        if bars[j].high > bars[hi].high:
+            hi = j
+    return hi
+
+
 def _zigzag_core(bars: list[Bar], threshold_for: Callable[[int], float]) -> list[Pivot]:
     if len(bars) < 2:
         return []
@@ -58,15 +76,15 @@ def _zigzag_core(bars: list[Bar], threshold_for: Callable[[int], float]) -> list
                     _make_pivot(len(pivots), bars[extreme_low_idx], "low", extreme_low_idx)
                 )
                 direction = "up"
-                extreme_high = b.high
-                extreme_high_idx = i
+                extreme_high_idx = _highest_high_idx(bars, extreme_low_idx, i)
+                extreme_high = bars[extreme_high_idx].high
             elif down_fires:
                 pivots.append(
                     _make_pivot(len(pivots), bars[extreme_high_idx], "high", extreme_high_idx)
                 )
                 direction = "down"
-                extreme_low = b.low
-                extreme_low_idx = i
+                extreme_low_idx = _lowest_low_idx(bars, extreme_high_idx, i)
+                extreme_low = bars[extreme_low_idx].low
             else:
                 if b.high > extreme_high:
                     extreme_high = b.high
@@ -85,8 +103,11 @@ def _zigzag_core(bars: list[Bar], threshold_for: Callable[[int], float]) -> list
                     _make_pivot(len(pivots), bars[extreme_high_idx], "high", extreme_high_idx)
                 )
                 direction = "down"
-                extreme_low = b.low
-                extreme_low_idx = i
+                # Firing bar isn't necessarily the deepest retracement low: a shrinking
+                # per-bar threshold can fire on a shallow late low while an earlier
+                # deeper low never tripped its (larger) threshold — take the true min.
+                extreme_low_idx = _lowest_low_idx(bars, extreme_high_idx, i)
+                extreme_low = bars[extreme_low_idx].low
 
         else:  # direction == "down"
             if b.low < extreme_low:
@@ -97,8 +118,8 @@ def _zigzag_core(bars: list[Bar], threshold_for: Callable[[int], float]) -> list
                     _make_pivot(len(pivots), bars[extreme_low_idx], "low", extreme_low_idx)
                 )
                 direction = "up"
-                extreme_high = b.high
-                extreme_high_idx = i
+                extreme_high_idx = _highest_high_idx(bars, extreme_low_idx, i)
+                extreme_high = bars[extreme_high_idx].high
 
     if direction == "up":
         pivots.append(_make_pivot(len(pivots), bars[extreme_high_idx], "high", extreme_high_idx))

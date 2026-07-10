@@ -67,7 +67,7 @@ def _close_top_into_parent(h: _Hypothesis, mode: ScaleMode) -> bool:
     if not gann_band_ok(parent_ctx, leg, mode):
         return False
 
-    parent_ctx.legs.append(leg)
+    _append_leg(parent_ctx, leg)
     if not _maybe_finalize_parent(parent_ctx, mode):
         parent_ctx.legs.pop()
         return False
@@ -126,6 +126,16 @@ def _check_close_direction_and_ratio(
         mode,
         leg_bars=leg_bars,
     )
+
+
+def _append_leg(ctx: _Context, leg: _Leg) -> None:
+    # A link context is complete at 3 legs and again at 5; growing past a 3-leg
+    # finalize must drop the cached verdict so the 5-leg verifier reruns (else
+    # LINK_T R4 middle-set / LINK_SE promotion are never re-checked).
+    ctx.legs.append(leg)
+    if ctx.final_kind is not None:
+        ctx.final_kind = None
+        ctx.rules_log = []
 
 
 def _maybe_finalize_parent(parent_ctx: _Context, mode: ScaleMode) -> bool:

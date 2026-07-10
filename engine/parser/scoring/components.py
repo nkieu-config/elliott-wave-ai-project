@@ -182,7 +182,10 @@ def score_intermediates(
 ) -> dict:
     # Public seam so callers outside the engine don't import scoring internals.
     # Keeps stored score_components; overlays an "intermediates" detail map.
-    legs = _select_display_nodes(scenario.root)
+    # Open legs (span_end=None, e.g. a Link-Wave's still-forming leg merged into the
+    # root) have no settled length/speed and would crash the length-based scorers, so
+    # they're excluded from the detail computation.
+    legs = [lg for lg in _select_display_nodes(scenario.root) if lg.span_end is not None]
     cfg = scoring or ScoringConfig()
     out: dict = dict(scenario.score_components or {})
     intermediates: dict = {}

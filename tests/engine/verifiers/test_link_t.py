@@ -90,6 +90,24 @@ def test_reject_first_group_not_normal() -> None:
     assert verify_link_t([g1, g2], [link], "linear") is None
 
 
+def test_reject_set_that_is_not_3w() -> None:
+    # r2 (all_3w): a 5-wave set can't appear in a trend linkage. Without a failing
+    # fixture, deleting _check_r2_all_3w leaves the suite green.
+    g1 = _build_3w_group([100, 130, 110, 140])
+    link = _link_segment(g1.segments[-1].end, end_price=130)
+    g2 = _build_3w_group([130, 160, 145, 180], kind=PatternKind.FIVE_SIDEWAY_BALANCE)
+    assert verify_link_t([g1, g2], [link], "linear") is None
+
+
+def test_reject_sets_with_divergent_trend() -> None:
+    # r5 (same_trend): every set must share the linkage's trend direction — an
+    # up set followed by a down set must be rejected.
+    g1 = _build_3w_group([100, 130, 110, 140])  # net up
+    link = _link_segment(g1.segments[-1].end, end_price=130)
+    g2 = _build_3w_group([130, 105, 120, 95])  # net down
+    assert verify_link_t([g1, g2], [link], "linear") is None
+
+
 def test_reject_middle_group_not_normal_in_3groups() -> None:
     g1 = _build_3w_group([100, 120, 110, 130])
     link1 = _link_segment(g1.segments[-1].end, end_price=125)
