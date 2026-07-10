@@ -97,7 +97,7 @@ def test_retrieval_pages_scenario_outlook_is_family_aware():
         "3W": {48, 54, 55, 104, 112},
         "5W_SIDEWAY": {43, 74, 103, 111},
         "5W_TREND": {33, 34, 101, 110},
-        "LINK_T": {60, 105, 113},
+        "LINK_T": {105, 113},
     }
     for family, signature in sig.items():
         pages = _retrieval_pages(make_scenario(family=family, score_components={}),

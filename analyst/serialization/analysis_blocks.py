@@ -92,8 +92,10 @@ def format_scenario_diff(diffs: tuple) -> str:
         f"{slot_plain(d.competitor_bottleneck)}"
     )
     lines.append(f"- **Same pattern type:** {'yes' if d.pattern_kind_match else 'no'}")
-    lines.append(f"- **Shape-and-proportion edge:** the rank-{d.structural_winner} scenario")
-    lines.append(f"- **Visual-appearance edge:** the rank-{d.visual_winner} scenario")
+    struct_edge = "a tie" if d.structural_winner == 0 else f"the rank-{d.structural_winner} scenario"
+    visual_edge = "a tie" if d.visual_winner == 0 else f"the rank-{d.visual_winner} scenario"
+    lines.append(f"- **Shape-and-proportion edge:** {struct_edge}")
+    lines.append(f"- **Visual-appearance edge:** {visual_edge}")
     if d.slot_deltas:
         lines.append(
             "\nPer-check gap (this scenario minus the rank-"
@@ -274,9 +276,12 @@ def format_succession(
             and npat.link_band_near is None
             and npat.link_band_far is None
         ):
+            # +T size is the 61.8% cap (a maximum); +S size is the 78.6%/101%
+            # floor (a minimum) — labelling both "at least" inverts the +T bound.
+            bound = "up to" if npat.link_type == "+T" else "at least"
             lines.append(
                 f"- Link wave size (band not yet anchorable while the "
-                f"pattern is open): at least ${npat.link_wave_size:.2f} "
+                f"pattern is open): {bound} ${npat.link_wave_size:.2f} "
                 f"in price span"
             )
     return "\n".join(lines) + "\n"

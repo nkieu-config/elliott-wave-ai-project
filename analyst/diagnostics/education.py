@@ -68,8 +68,8 @@ FAMILY_EDUCATION: dict[str, FamilyEducation] = {
         rules=(
             "There are exactly three legs — never more — before the "
             "correction is done.",
-            "Wave B retraces some of Wave A but does not fully reverse "
-            "it (the trend it is correcting still exists).",
+            "Wave B may retrace only part of Wave A or extend well beyond "
+            "it (a deeper 'B-longer' correction is still valid).",
             "Wave C usually exceeds the end of Wave A in the same "
             "direction.",
         ),

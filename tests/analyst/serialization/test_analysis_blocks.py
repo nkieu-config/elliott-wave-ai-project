@@ -276,6 +276,21 @@ def test_format_succession_pct_from_current_and_link_wave_size():
     assert "$42.50" in md
 
 
+def test_format_succession_open_size_bound_follows_link_type():
+    # +T size is the 61.8% cap (up to); +S size is the 78.6% floor (at least).
+    def _report(link_type: str) -> SuccessionReport:
+        return SuccessionReport(
+            family="3W", is_terminal=False, note="",
+            next_patterns=(
+                NextPattern(link_type=link_type, next_families=("3W",),
+                            link_band_near=None, link_band_far=None,
+                            theory_pages=(64,), rationale="x", link_wave_size=18.5),
+            ),
+        )
+    assert "up to $18.50" in format_succession(_report("+T"))
+    assert "at least $18.50" in format_succession(_report("+S"))
+
+
 def test_diversified_fib_flow_subset_caps_total_at_16():
     # 9 stems × 3 each, 2/group → 18 candidates, trimmed to the 16 total cap.
     targets = tuple(

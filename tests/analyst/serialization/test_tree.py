@@ -18,3 +18,15 @@ def test_format_tree_root_with_5_legs():
     assert "[5-Wave Trend ·" in text
     assert "s1" in text and "s5" in text
     assert "→" in text
+
+
+def test_format_tree_open_leg_renders_neutral_direction():
+    def pv(p):
+        return Pivot(index=0, time=datetime(2020, 1, 1), price=p, kind="low", bar_index=0)
+    root = WaveNode(role=WaveRole.ANCHOR, span_start=pv(100), span_end=pv(120),
+                    pattern_kind=None)
+    # Open leg (span_end=None) must not render a false "↓".
+    root.children.append(WaveNode(role=WaveRole.S1, span_start=pv(100), span_end=None))
+    text = format_tree(root, family="5W_TREND")
+    assert "·" in text
+    assert "↓" not in text

@@ -15,7 +15,12 @@ def format_tree(root: WaveNode, family: str) -> str:
     )
     lines.append(f"ROOT [{header}]")
     for child in root.children:
-        direction = "↑" if (child.span_end and child.span_end.price > child.span_start.price) else "↓"
+        # Open leg (span_end=None) has no settled direction — "·", not a false "↓"
+        # that could contradict the Decision block's open-wave direction.
+        if child.span_end is None:
+            direction = "·"
+        else:
+            direction = "↑" if child.span_end.price > child.span_start.price else "↓"
         end_price = child.span_end.price if child.span_end else None
         start_price = child.span_start.price
         bar_span = (

@@ -1,3 +1,4 @@
+from dataclasses import fields as dc_fields
 from dataclasses import replace
 
 from analyst.diagnostics.targets import compute_targets
@@ -32,6 +33,25 @@ def test_5wt_s3_longest_has_three_internal_pair_targets():
     assert any("s1 → s5" in d for d in derivations)
     assert any("s3 → s5" in d for d in derivations)
     assert all(t.theory_page == 110 for t in ts.fib_flow_targets)
+
+
+def test_targets_never_serialize_non_positive_prices():
+    # A deep extension of a large down leg would compute a $-X price; such a level
+    # is not real and must be dropped (this fixture would produce one un-clamped).
+    sc = make_scenario(
+        family="5W_TREND", pattern_kind=PatternKind.FIVE_TREND_S3_LONGEST,
+        pivots=[(100, 0, "high"), (40, 40, "low"), (55, 50, "high"),
+                (15, 100, "low"), (30, 130, "high"), (5, 200, "low")],
+        score_components={},
+    )
+    ts = compute_targets(sc)
+    all_targets = []
+    for f in dc_fields(ts):
+        v = getattr(ts, f.name)
+        if isinstance(v, (list, tuple)):
+            all_targets.extend(t for t in v if hasattr(t, "price"))
+    assert all_targets
+    assert all(t.price > 0 for t in all_targets)
 
 
 def test_5wt_s5_longest_uses_combined_s1_s3_internal():

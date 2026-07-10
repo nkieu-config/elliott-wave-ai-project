@@ -51,9 +51,11 @@ def _differentiator(layer1: AnalysisResult) -> str:
         parts.append(
             f"Largest gaps in score points (this scenario minus the competitor): {top}."
         )
+    struct = "are tied" if d.structural_winner == 0 else f"favour scenario {d.structural_winner}"
+    visual = "are tied" if d.visual_winner == 0 else f"favour scenario {d.visual_winner}"
     parts.append(
-        f"The shape-and-proportion checks favour scenario {d.structural_winner}; "
-        f"the visual-appearance checks favour scenario {d.visual_winner}."
+        f"The shape-and-proportion checks {struct}; "
+        f"the visual-appearance checks {visual}."
     )
     return _join_sentences(parts)
 

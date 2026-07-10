@@ -30,16 +30,23 @@ def _ladder(
     deriv_fmt: str,
 ) -> list[Target]:
     # price = base + sign·lvl·size per level. `deriv_fmt` has a `{lvl}` slot.
-    return [
-        Target(
-            name=f"{label_prefix}_{lvl}",
-            price=base + sign * lvl * size,
-            type=target_type,
-            theory_page=theory_page,
-            derivation=deriv_fmt.format(lvl=lvl),
+    # Skip non-positive prices — a $-X target (deep extension of a large down leg)
+    # is not a real level and must not reach the prompt/UI.
+    out: list[Target] = []
+    for lvl in levels:
+        price = base + sign * lvl * size
+        if price <= 0:
+            continue
+        out.append(
+            Target(
+                name=f"{label_prefix}_{lvl}",
+                price=price,
+                type=target_type,
+                theory_page=theory_page,
+                derivation=deriv_fmt.format(lvl=lvl),
+            )
         )
-        for lvl in levels
-    ]
+    return out
 
 
 def _internal_targets(source: WaveNode, label_prefix: str, theory_page: int) -> list[Target]:

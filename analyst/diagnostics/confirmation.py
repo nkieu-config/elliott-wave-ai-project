@@ -144,7 +144,7 @@ def _eval_3w(sc: Scenario, bars: list[Bar], mode: ScaleMode) -> ConfirmationRepo
     if not s2_longer:
         c1_bar = bars_break_trendline(
             bars, s1.span_start, s2.span_end,
-            direction=trend_dir, mode=mode, after_bar=s3_end_bar,
+            direction=opposite_dir, mode=mode, after_bar=s3_end_bar,
         )
         levels.append(ConfirmationLevel(
             name="C1", condition="0-s2 trendline broken",

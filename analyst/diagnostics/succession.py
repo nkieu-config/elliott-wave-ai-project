@@ -191,7 +191,9 @@ def _succession_after_5ws(sc: Scenario) -> SuccessionReport:
 
 def _succession_after_link(sc: Scenario) -> SuccessionReport:
     family = sc.family
-    n_sets = len(sc.root.sets)
+    # An open link root whose first set hasn't closed has sets=None (0 completed
+    # sets) — targets.py guards the same field; succession must too, else layer1 500s.
+    n_sets = len(sc.root.sets or [])
     if n_sets >= _MAX_LINK_SETS:
         return SuccessionReport(
             family=family, is_terminal=True, next_patterns=(),
@@ -220,20 +222,32 @@ def _succession_after_link(sc: Scenario) -> SuccessionReport:
             link_wave_size=ext_size,
         )
     else:  # LINK_S / LINK_SE
-        # +S extension — wave ≥ 78.6% of last set's full range (p.73), open above.
-        last_range = _range_of(last_set)
-        near, _ = _band(end, -_last_leg_sign(sc), last_range,
-                        _S_LINK_MIN_FRAC_3W, None)
-        ext_size = last_range * _S_LINK_MIN_FRAC_3W if last_range else None
+        # +S extension size depends on the last set's kind, mirroring the standalone
+        # 5WS rule: Expand → 78.6% of its Wave 5 leg (p.73); Contract/Balance → 101%
+        # of its range (p.74); a 3W set → 78.6% of its full range (p.73).
+        last_kind = sc.root.sets[-1].pattern_kind if sc.root.sets else None
+        if last_kind == PatternKind.FIVE_SIDEWAY_EXPAND:
+            base = _leg_size(last_set[4]) if len(last_set) >= 5 else None
+            min_frac, s_pages = _S_LINK_MIN_FRAC_3W, (57, 67, 73)
+            basis = "78.6% of the last set's Wave 5 leg"
+        elif last_kind in (PatternKind.FIVE_SIDEWAY_CONTRACT, PatternKind.FIVE_SIDEWAY_BALANCE):
+            base = _range_of(last_set)
+            min_frac, s_pages = _S_LINK_MIN_FRAC_5WS, (57, 67, 74)
+            basis = "101% of the last set's full range"
+        else:
+            base = _range_of(last_set)
+            min_frac, s_pages = _S_LINK_MIN_FRAC_3W, (57, 67, 73)
+            basis = "78.6% of the last set's full range"
+        near, _ = _band(end, -_last_leg_sign(sc), base, min_frac, None)
+        ext_size = base * min_frac if base else None
         extend = NextPattern(
             link_type="+S", next_families=("3W", "5W_SIDEWAY"),
             link_band_near=near, link_band_far=None,
-            theory_pages=(57, 67, 73),
+            theory_pages=s_pages,
             rationale=(
                 f"This Sideway linkage holds {n_sets} set(s) and may take "
                 f"one more 3-Wave or 5-Wave Sideway (3 sets maximum); the "
-                f"link wave spans at least 78.6% of the last set's full "
-                f"range."
+                f"link wave spans at least {basis}."
             ),
             link_wave_size=ext_size,
         )

@@ -48,9 +48,15 @@ def format_slot_grid(components: dict, bottleneck: str | None) -> str:
     st = components.get("structural_total")
     vt = components.get("visual_total")
     if isinstance(st, (int, float)) and isinstance(vt, (int, float)):
-        weaker = "shape-and-proportion" if st <= vt else "visual-appearance"
-        lines.append(
-            f"\nThe {weaker} side is the weaker of the two dimensions and "
-            f"sets the overall match quality."
-        )
+        if st == vt:
+            lines.append(
+                "\nThe shape-and-proportion and visual-appearance sides score "
+                "equally; neither is the weaker dimension."
+            )
+        else:
+            weaker = "shape-and-proportion" if st < vt else "visual-appearance"
+            lines.append(
+                f"\nThe {weaker} side is the weaker of the two dimensions and "
+                f"sets the overall match quality."
+            )
     return "\n".join(lines)

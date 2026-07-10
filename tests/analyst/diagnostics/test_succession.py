@@ -40,6 +40,35 @@ def test_3w_offers_both_t_and_s_links():
     assert set(by_type["+S"].next_families) == {"3W", "5W_SIDEWAY"}
 
 
+@pytest.mark.parametrize("family", ["LINK_T", "LINK_S"])
+def test_open_link_root_with_no_sets_does_not_crash(family):
+    # An open link root (first set not yet closed) has root.sets=None; compute_layer1
+    # calls this unconditionally, so a crash here 500s the /scenario/layer1 route.
+    sc = make_scenario(family=family, pattern_kind=None,
+                       pivots=[(100, 0, "low"), (130, 10, "high"), (110, 20, "low")],
+                       sets=None)
+    assert sc.root.sets is None
+    rep = compute_succession(sc)  # must not raise
+    assert rep.family == family
+    assert rep.is_terminal is False
+
+
+def test_link_s_extension_uses_101pct_when_last_set_is_contract():
+    # +S extension after a LINK_S must size off the last set's kind: a 5WS
+    # Contract/Balance last set requires 101% of its range (p.74), not 78.6%.
+    pivots = [(100, 0, "low"), (120, 10, "high"), (110, 20, "low"),
+              (130, 30, "high"), (115, 40, "low"), (150, 50, "high")]
+    sc = make_scenario(family="LINK_S", pattern_kind=None, pivots=pivots,
+                       score_components={})
+    sc.root.sets = [
+        LinkSet(pattern_kind=PatternKind.THREE_NORMAL, leg_start=0, leg_end=2),
+        LinkSet(pattern_kind=PatternKind.FIVE_SIDEWAY_CONTRACT, leg_start=3, leg_end=5),
+    ]
+    s = {p.link_type: p for p in compute_succession(sc).next_patterns}["+S"]
+    assert 74 in s.theory_pages
+    assert s.link_wave_size == pytest.approx(35 * 1.01)
+
+
 def test_3w_plus_t_band_is_counter_trend_within_s3_fractions():
     sc = _scenario([100, 120, 110, 130], "3W", PatternKind.THREE_NORMAL)
     t = {pat.link_type: pat for pat in compute_succession(sc).next_patterns}["+T"]

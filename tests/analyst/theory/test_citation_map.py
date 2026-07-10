@@ -86,8 +86,8 @@ def test_family_succession_pages():
     assert family_succession_pages("3W") == {57, 59, 64, 67, 73}
     assert family_succession_pages("5W_SIDEWAY") == {57, 67, 73, 74}
     assert family_succession_pages("5W_TREND") == {57, 59, 67}
-    assert family_succession_pages("LINK_T") == {57, 59, 60, 64}
-    assert family_succession_pages("LINK_S") == {57, 67, 68, 73}
+    assert family_succession_pages("LINK_T") == {57, 59, 64, 67}
+    assert family_succession_pages("LINK_S") == {57, 59, 67, 73, 74}
     assert family_succession_pages("UNKNOWN") == set()
 
 

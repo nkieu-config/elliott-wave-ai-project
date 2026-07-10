@@ -12,6 +12,7 @@ class ScenarioDiff:
     primary_bottleneck: str
     competitor_bottleneck: str
     slot_deltas: dict[str, float]
+    # 1 = primary wins, 2 = competitor wins, 0 = exact tie (no edge either way).
     structural_winner: int
     visual_winner: int
     pattern_kind_match: bool
@@ -20,6 +21,13 @@ class ScenarioDiff:
     competitor_family: str = ""
     primary_probability: float = 0.0
     competitor_probability: float = 0.0
+
+
+def _winner(primary: float, competitor: float) -> int:
+    # 0 on an exact tie so serializers don't award the edge to whichever ranks second.
+    if primary > competitor:
+        return 1
+    return 2 if competitor > primary else 0
 
 
 def _bottleneck_slot(components: dict) -> str:
@@ -52,8 +60,12 @@ def diff_top_scenarios(scenarios: list, top_k: int = 3) -> list[ScenarioDiff]:
             cv = c_comp.get(slot)
             if pv is not None and cv is not None:
                 deltas[slot] = float(pv - cv)
-        struct_winner = 1 if p_comp.get("structural_total", 0) > c_comp.get("structural_total", 0) else 2
-        visual_winner = 1 if p_comp.get("visual_total", 0) > c_comp.get("visual_total", 0) else 2
+        struct_winner = _winner(
+            p_comp.get("structural_total", 0), c_comp.get("structural_total", 0)
+        )
+        visual_winner = _winner(
+            p_comp.get("visual_total", 0), c_comp.get("visual_total", 0)
+        )
         out.append(ScenarioDiff(
             primary_rank=i + 1,
             competitor_rank=i + 2,

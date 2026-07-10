@@ -34,6 +34,22 @@ def test_diff_two_scenarios():
     assert d.pattern_kind_match is False
 
 
+def test_diff_reports_tie_when_dimension_totals_equal():
+    # Equal structural/visual totals must report a tie (0), not silently award the
+    # edge to the rank-2 competitor.
+    sc1 = make_scenario(
+        family="5W_TREND", pattern_kind=PatternKind.FIVE_TREND_S3_LONGEST, score=0.6,
+        score_components={"structural_total": 0.5, "visual_total": 0.5},
+    )
+    sc2 = make_scenario(
+        family="5W_TREND", pattern_kind=PatternKind.FIVE_TREND_S1_LONGEST, score=0.5,
+        score_components={"structural_total": 0.5, "visual_total": 0.5},
+    )
+    d = diff_top_scenarios([sc1, sc2])[0]
+    assert d.structural_winner == 0
+    assert d.visual_winner == 0
+
+
 def test_diff_carries_family_and_relative_probability():
     sc1 = make_scenario(
         family="5W_SIDEWAY",

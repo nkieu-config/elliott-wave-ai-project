@@ -1,7 +1,26 @@
+from datetime import datetime, timedelta
+
 from analyst.diagnostics.confirmation import evaluate_confirmation
-from engine.types import PatternKind
+from engine.types import Bar, PatternKind
 from tests.analyst._helpers import make_scenario
 from tests.analyst._helpers import make_uptrend_then_drop_bars as _bars_uptrend_then_drop
+
+
+def _flat_bars(prices: list[float]) -> list[Bar]:
+    base = datetime(2024, 1, 1)
+    return [
+        Bar(time=base + timedelta(weeks=i), open=p, high=p + 1, low=p - 1, close=p)
+        for i, p in enumerate(prices)
+    ]
+
+
+def _up_3w() -> "object":
+    # s2 (110) stays above the 0 low (100), so the 0-s2 line slopes up.
+    return make_scenario(
+        family="3W", pattern_kind=PatternKind.THREE_NORMAL,
+        pivots=[(100.0, 0, "low"), (120.0, 1, "high"), (110.0, 2, "low"), (130.0, 3, "high")],
+        score_components={},
+    )
 
 
 def _build_5w_trend_scenario():
@@ -110,6 +129,23 @@ def test_3w_s2_longer_skips_c1():
     assert rep.is_applicable
     assert len(rep.levels) == 1
     assert rep.levels[0].name == "C2"
+
+
+def test_3w_c1_not_met_while_price_keeps_advancing():
+    # C1 (0-s2 trendline break) is a COUNTER-trend break: an up 3W that keeps
+    # rallying with no reversal must not report C1 met (regression — it did when
+    # the break was checked in the trend direction).
+    c1 = evaluate_confirmation(_up_3w(), _flat_bars([100, 120, 110, 130, 135, 140, 145]),
+                               mode="linear").levels[0]
+    assert c1.name == "C1"
+    assert c1.met is False
+
+
+def test_3w_c1_met_on_counter_trend_reversal():
+    c1 = evaluate_confirmation(_up_3w(), _flat_bars([100, 120, 110, 130, 120, 105, 95]),
+                               mode="linear").levels[0]
+    assert c1.name == "C1"
+    assert c1.met is True
 
 
 def test_link_t_returns_not_applicable():
