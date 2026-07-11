@@ -1,142 +1,26 @@
+/**
+ * The app's view of the wire shape. Every field name and nullability comes from
+ * `api-types.gen.ts`, which is generated from the API's OpenAPI schema — rename a
+ * field server-side and this file stops compiling.
+ *
+ * Regenerate with `npm run gen:api-types` (CI fails if it drifts).
+ */
+
+import type { components } from "./api-types.gen";
+
+type Wire<K extends keyof components["schemas"]> = components["schemas"][K];
+
+/**
+ * Enum-ish wire fields arrive as `string`, on purpose: `schemas_responses.py` keeps
+ * them wide so a new engine value never 500s a valid response. These unions are the
+ * values the UI knows how to render — narrow with a total function at the point of
+ * use (see `confidenceTier`, `TIER_FG`) so an unknown value degrades instead of
+ * crashing. Do not bake them into the wire types below; that would be a lie.
+ */
 export type PivotKind = "high" | "low";
 export type ScaleMode = "linear" | "log";
-
-export interface Bar {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export interface Pivot {
-  index: number;
-  time: string;
-  price: number;
-  kind: PivotKind;
-  bar_index: number | null;
-}
-
-export interface Segment {
-  start: Pivot;
-  end: Pivot;
-}
-
-// Only populated on Wave nodes whose pattern_kind is LINK_T/LINK_S/LINK_SE.
-export interface LinkSet {
-  pattern_kind: string;
-  pattern_label: string;
-  /** Inclusive index range into the parent Wave's `children`. */
-  leg_start: number;
-  leg_end: number;
-  degree_label: string | null;
-}
-
-export interface Wave {
-  role: string;
-  pattern_kind: string | null;
-  degree_label: string | null;
-  span_start: Pivot;
-  span_end: Pivot | null;
-  nesting_level: number;
-  segments: Segment[];
-  children: Wave[];
-  /** Null for non-link nodes. */
-  sets: LinkSet[] | null;
-}
-
 export type ConfidenceTier = "low" | "mid" | "high";
-
-export interface ConfidenceTierInfo {
-  key: ConfidenceTier;
-  word: "Low" | "Moderate" | "Strong";
-}
-
-// Arbitrary slot keys plus the named roll-ups the bottleneck logic reads, typed
-// so `total`/`quality`/`commitment` narrow to `number | undefined`.
-export type ScoreComponents = Record<string, number> & {
-  total?: number;
-  quality?: number;
-  commitment?: number;
-};
-
-export interface Scenario {
-  id: string;
-  score: number;
-  score_components: ScoreComponents;
-  family: string;
-  family_label: string;
-  pattern_kind: string | null;
-  pattern_label: string | null;
-  is_complete: boolean;
-  depth: number;
-  confidence_tier: ConfidenceTierInfo;
-  root: Wave;
-  /** Open sub-pattern tree (not yet in root.children); projection walks it DFS
-   * so the dashed line traces the partial sub-count. Null when complete. */
-  open_subtree: Wave | null;
-}
-
-// suggested_action may be Thai.
-export interface Diagnostic {
-  death_reason: string;
-  suggested_action: string;
-  first_divergence_index: number;
-  last_alive_segment_index: number;
-}
-
-export interface AnalysisReport {
-  anchor: Pivot | null;
-  segments: Segment[];
-  scenarios: Scenario[];
-  /** Null only for pre-diagnostic snapshots; the live API always emits it. */
-  diagnostic: Diagnostic | null;
-  summary: string;
-}
-
-export interface ScenarioCounts {
-  total: number;
-  complete: number;
-  open: number;
-}
-
-export interface SampleData {
-  meta: {
-    symbol: string;
-    period: string;
-    timeframe: string;
-    generated_at: string;
-    config: {
-      scale_mode: ScaleMode;
-      atr_period: number;
-      atr_multiplier: number;
-      atr_floor: number;
-      min_bars_between: number;
-      k_sigma: number;
-      log_tol_fib: number;
-      pull_depth_lo: number;
-      pull_depth_hi: number;
-      pull_depth_tol: number;
-      pivot_window: number;
-      commitment_curve: string;
-    };
-  };
-  bars: Bar[];
-  raw_pivots: Pivot[];
-  active_pivots: Pivot[];
-  selected_anchor: Pivot | null;
-  report: AnalysisReport | null;
-  top_scenario: Scenario | null;
-  /** Pre-computed Layer-1 for top_scenario; hydrates the ["layer1", config,
-   * top.id] cache without a second request. Null on eager failure / no
-   * scenarios — clients fall back to /api/scenario/layer1. */
-  top_scenario_layer1: Layer1Result | null;
-  scenario_counts: ScenarioCounts;
-  load_error: string | null;
-}
-
-// analyst.compute_layer1 output
+export type WaveStage = "complete" | "early" | "mid" | "late" | "overshot" | "unknown";
 export type TargetType =
   | "retracement"
   | "internal"
@@ -144,127 +28,48 @@ export type TargetType =
   | "invalidation"
   | "projected";
 
-export interface Target {
-  name: string;
-  price: number;
-  type: TargetType;
-  theory_page: number;
-  derivation: string;
-}
+export type Bar = Wire<"BarOut">;
+export type Pivot = Wire<"PivotOut">;
+export type Segment = Wire<"SegmentOut">;
 
-export interface TargetSet {
-  confirmation_targets: Target[];
-  fib_flow_targets: Target[];
-  invalidation: Target;
-}
+// Only populated on Wave nodes whose pattern_kind is LINK_T/LINK_S/LINK_SE.
+export type LinkSet = Wire<"LinkSetOut">;
+export type Wave = Wire<"WaveOut">;
 
-export interface TheoryRef {
-  pages: number[];
-  concept: string;
-  binding: "rule_implementation" | "concept_operationalization" | "heuristic";
-  note: string;
-}
+export type ConfidenceTierInfo = Wire<"ConfidenceTierOut">;
+export type ScoreComponents = Wire<"ScenarioOut">["score_components"];
+export type Scenario = Wire<"ScenarioOut">;
 
-export interface Bottleneck {
-  slot_name: string;
-  slot_value: number;
-  dimension: "structural" | "visual";
-  is_dim_minimum: boolean;
-  is_overall_minimum: boolean;
-  gap_to_next: number;
-  intermediates: Record<string, unknown>;
-  plain_explanation: string;
-  theory_ref: TheoryRef;
-}
+// suggested_action may be Thai.
+export type Diagnostic = Wire<"DiagnosticOut">;
+export type AnalysisReport = Wire<"ReportOut">;
+export type ScenarioCounts = Wire<"ScenarioCountsOut">;
 
-export interface ConfirmationLevel {
-  name: string;
-  condition: string;
-  met: boolean;
-  triggered_at_bar: number | null;
-  theory_page: number;
-}
+export type SampleData = Wire<"PipelineResponse">;
 
-export interface ConfirmationReport {
-  family: string;
-  levels: ConfirmationLevel[];
-  is_applicable: boolean;
-  not_applicable_reason: { text: string; citation: number | null } | null;
-  highest_met: string | null;
-}
+export type Target = Wire<"TargetOut">;
+export type TargetSet = Wire<"TargetSetOut">;
+export type TheoryRef = Wire<"TheoryRefOut">;
+export type Bottleneck = Wire<"BottleneckOut">;
+export type ConfirmationLevel = Wire<"ConfirmationLevelOut">;
+export type ConfirmationReport = Wire<"ConfirmationReportOut">;
+export type PriceMove = Wire<"PriceMoveOut">;
 
-export interface PriceMove {
-  label: string;
-  price: number;
-  pct_from_current: number;
-}
+export type DecisionSummary = Wire<"DecisionSummaryOut">;
+export type AlternativeBrief = Wire<"AlternativeBriefOut">;
 
-export type WaveStage = "complete" | "early" | "mid" | "late" | "overshot" | "unknown";
-
-export interface DecisionSummary {
-  current: PriceMove | null;
-  target_low: PriceMove | null;
-  target_high: PriceMove | null;
-  invalidation: PriceMove | null;
-  risk_reward: number | null;
-  direction: string | null;
-  horizon_bars: number | null;
-  bar_interval: string | null;
-  horizon_human: string | null;
-  stage: WaveStage;
-  open_wave_start: number | null;
-  open_wave_direction: string | null;
-  wave_progress_pct: number | null;
-}
-
-export interface AlternativeBrief {
-  family: string;
-  family_label: string;
-  target_low: PriceMove | null;
-  target_high: PriceMove | null;
-  invalidation: PriceMove | null;
-  direction: string | null;
-  stage: WaveStage;
-}
-
-export interface NextPattern {
-  link_type: string;
-  next_families: string[];
-  link_band_near: number | null;
-  link_band_far: number | null;
-  theory_pages: number[];
-  rationale: string;
-  link_wave_size: number | null;
-}
-
-export interface SuccessionReport {
-  family: string;
-  is_terminal: boolean;
-  next_patterns: NextPattern[];
-  note: string;
-}
-
-export interface Layer1Result {
-  scenario_id: string;
-  bottleneck: Bottleneck | null;
-  confirmation: ConfirmationReport | null;
-  targets: TargetSet | null;
-  succession: SuccessionReport | null;
-  decision: DecisionSummary | null;
-  alternative: AlternativeBrief | null;
-  score_intermediates: Record<string, unknown>;
-}
+export type NextPattern = Wire<"NextPatternOut">;
+export type SuccessionReport = Wire<"SuccessionReportOut">;
+export type Layer1Result = Wire<"Layer1Response">;
 
 // Deterministic — no LLM involved.
-export interface FamilyEducation {
-  family: string;
-  title: string;
-  one_line: string;
-  rules: string[];
-  visual_cues: string[];
-}
+export type FamilyEducation = Wire<"EducationResponse">;
+export type CitationRef = Wire<"QaCitation">;
 
-export interface CitationRef {
-  page: number;
-  claim_sentence: string;
-}
+// SSE narration frames. Not reachable from a route signature server-side, so
+// dump-openapi.py publishes them into the schema explicitly.
+export type StartFrame = Wire<"StartFrame">;
+export type TokenFrame = Wire<"TokenFrame">;
+export type CitationsFrame = Wire<"CitationsFrame">;
+export type DoneFrame = Wire<"DoneFrame">;
+export type ErrorFrame = Wire<"ErrorFrame">;

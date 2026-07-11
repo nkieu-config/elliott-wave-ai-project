@@ -10,6 +10,14 @@ export const COMMITMENT_CURVES = ["off", "sqrt", "linear"] as const;
 
 export type Timeframe = (typeof TIMEFRAMES)[number];
 export type { ScaleMode };
+
+// meta.config echoes the run's scale_mode as a plain `string` (see lib/types.ts);
+// fall back to the default rather than hand a bad literal to the chart.
+export function asScaleMode(value: string): ScaleMode {
+  return (SCALE_MODES as readonly string[]).includes(value)
+    ? (value as ScaleMode)
+    : CONFIG_DEFAULTS.scale_mode;
+}
 export type Period = (typeof PERIODS)[number];
 export type CommitmentCurve = (typeof COMMITMENT_CURVES)[number];
 

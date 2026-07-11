@@ -1,7 +1,12 @@
 """The wire shape's single source of truth: ``serializers.py`` constructs these
-models and routes return them directly. Field names track ``apps/web/lib/types.ts``.
+models and routes return them directly.
 
-Enum-ish fields are typed ``str`` not ``Literal`` so a new enum value never 500s a valid response.
+``apps/web/lib/types.ts`` is *generated* from these via OpenAPI, so renaming a field
+here stops the web compiling. Regenerate with ``apps/web/scripts/dump-openapi.py``,
+then ``npm run gen:api-types`` in apps/web; CI fails if either artefact is stale.
+
+Enum-ish fields are typed ``str`` not ``Literal`` so a new enum value never 500s a valid
+response. The web narrows them at the point of use (``asTier``, ``asScaleMode``).
 """
 
 from __future__ import annotations
@@ -250,6 +255,65 @@ class EducationResponse(BaseModel):
     one_line: str
     rules: list[str]
     visual_cues: list[str]
+
+
+class QaCitation(BaseModel):
+    page: int
+    claim_sentence: str
+
+
+class QaResponse(BaseModel):
+    question: str
+    answer: str
+    citations: list[QaCitation]
+    # Pages similarity surfaced — the answer's allowed-citation set.
+    retrieved_pages: list[int]
+    # True when the question fell below the theory-relevance floor (no LLM call).
+    out_of_scope: bool
+    # True when the gate rejected the answer (generic fallback returned).
+    fell_back: bool
+    cached: bool
+    model_id: str | None
+
+
+# SSE narration frames. FastAPI can't infer these from the route (the body is a
+# stream, not a model), so `apps/web/scripts/dump-openapi.py` publishes them into
+# the schema by hand — otherwise the web would be back to hand-typing them.
+class StartFrame(BaseModel):
+    mode: str
+    model_id: str | None
+    scenario_id: str
+
+
+class TokenFrame(BaseModel):
+    text: str
+
+
+class CitationsFrame(BaseModel):
+    citations: list[QaCitation]
+    cached: bool
+    fell_back: bool
+    model_id: str | None
+    prompt_version: str | None
+
+
+class DoneFrame(BaseModel):
+    total_tokens: int
+    gen_ms: float
+
+
+class ErrorFrame(BaseModel):
+    message: str
+
+
+# Not reachable from any route signature — see the note above.
+SSE_FRAMES: tuple[type[BaseModel], ...] = (
+    StartFrame,
+    TokenFrame,
+    CitationsFrame,
+    DoneFrame,
+    ErrorFrame,
+)
 
 
 class HealthResponse(BaseModel):

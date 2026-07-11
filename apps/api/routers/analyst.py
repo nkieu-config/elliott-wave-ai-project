@@ -4,17 +4,25 @@ one blocking call; ``gen()`` paces it as ``token`` events."""
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from apps.api import pipeline_ops
 from apps.api.middleware import RELEASE_SCOPE_KEY
 from apps.api.schemas import AnalystStreamRequest
+from apps.api.schemas_responses import (
+    CitationsFrame,
+    DoneFrame,
+    ErrorFrame,
+    QaCitation,
+    StartFrame,
+    TokenFrame,
+)
 from apps.api.services import analyst_service
 from engine import Bar, Scenario
 
@@ -59,17 +67,20 @@ async def analyst_stream(req: AnalystStreamRequest, request: Request) -> Streami
 
     bars, scenarios, scenario, model_id = await asyncio.to_thread(_preflight)
 
+    def _frame(event: str, payload: BaseModel) -> bytes:
+        return f"event: {event}\ndata: {payload.model_dump_json()}\n\n".encode()
+
     async def gen() -> AsyncIterator[bytes]:
         emitted = 0
         try:
-            start_evt = json.dumps(
-                {
-                    "mode": req.mode,
-                    "model_id": model_id,
-                    "scenario_id": req.scenario_id,
-                }
+            yield _frame(
+                "start",
+                StartFrame(
+                    mode=req.mode,
+                    model_id=model_id,
+                    scenario_id=req.scenario_id,
+                ),
             )
-            yield f"event: start\ndata: {start_evt}\n\n".encode()
 
             # LLM call in a thread; time only generation (token loop below is playback).
             t_gen0 = time.perf_counter()
@@ -96,30 +107,29 @@ async def analyst_stream(req: AnalystStreamRequest, request: Request) -> Streami
             # Filter empties: "".split(" ") == [""] would emit one ghost token.
             tokens = [t for t in (output.narration or "").split(" ") if t]
             for tok in tokens:
-                payload = json.dumps({"text": tok + " "})
-                yield f"event: token\ndata: {payload}\n\n".encode()
+                yield _frame("token", TokenFrame(text=tok + " "))
                 emitted += 1
                 if sleep_s > 0:
                     await asyncio.sleep(sleep_s)
 
-            citations_payload = json.dumps(
-                {
-                    "citations": [
-                        {"page": c.page, "claim_sentence": c.claim_sentence}
+            yield _frame(
+                "citations",
+                CitationsFrame(
+                    citations=[
+                        QaCitation(page=c.page, claim_sentence=c.claim_sentence)
                         for c in (output.citations or ())
                     ],
-                    "cached": bool(output.cached),
-                    "fell_back": bool(output.fell_back),
-                    "model_id": output.model_id,
-                    "prompt_version": output.prompt_version,
-                }
+                    cached=bool(output.cached),
+                    fell_back=bool(output.fell_back),
+                    model_id=output.model_id,
+                    prompt_version=output.prompt_version,
+                ),
             )
-            yield f"event: citations\ndata: {citations_payload}\n\n".encode()
 
-            done_evt = json.dumps(
-                {"total_tokens": emitted, "gen_ms": round(gen_ms, 1)}
+            yield _frame(
+                "done",
+                DoneFrame(total_tokens=emitted, gen_ms=round(gen_ms, 1)),
             )
-            yield f"event: done\ndata: {done_evt}\n\n".encode()
         except asyncio.CancelledError:
             # Re-raise so cancellation propagates instead of being swallowed.
             _log.info(
@@ -131,8 +141,7 @@ async def analyst_stream(req: AnalystStreamRequest, request: Request) -> Streami
         except Exception:
             # Don't echo internal exception text to LAN clients.
             _log.exception("analyst.analyze failed (mode=%s)", req.mode)
-            err = json.dumps({"message": "analyst narration failed"})
-            yield f"event: error\ndata: {err}\n\n".encode()
+            yield _frame("error", ErrorFrame(message="analyst narration failed"))
             return
 
     return StreamingResponse(

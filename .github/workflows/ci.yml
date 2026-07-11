@@ -37,6 +37,15 @@ jobs:
       - name: Check architecture layers
         run: uv run lint-imports
 
+      # apps/web/openapi.json is the committed wire contract the web's types are
+      # generated from. Change a response model without regenerating it and the
+      # web keeps compiling against a shape the API no longer sends.
+      - name: Check the wire contract is current
+        run: |
+          uv run python apps/web/scripts/dump-openapi.py > apps/web/openapi.json
+          git diff --exit-code --stat apps/web/openapi.json \
+            || { echo "::error::openapi.json is stale — run apps/web/scripts/dump-openapi.py and commit, then 'npm run gen:api-types' in apps/web"; exit 1; }
+
       # --cov applies the pyproject coverage config (branch + fail_under = 75).
       - name: Test
         run: uv run pytest --cov
@@ -61,6 +70,14 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
 
       - run: npm ci
+
+      # lib/api-types.gen.ts must match the committed openapi.json; type-check then
+      # fails wherever the app reads a field the API no longer sends.
+      - name: Check generated wire types are current
+        run: |
+          npm run gen:api-types
+          git diff --exit-code --stat lib/api-types.gen.ts \
+            || { echo "::error::lib/api-types.gen.ts is stale — run 'npm run gen:api-types' and commit"; exit 1; }
 
       - name: Type-check
         run: npm run type-check

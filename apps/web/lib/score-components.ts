@@ -105,6 +105,14 @@ export const TIER_FG: Record<Tier, string> = {
   high: "var(--color-up)",
 };
 
+const TIERS = ["low", "mid", "high"] as const satisfies readonly Tier[];
+
+// The wire types confidence_tier.key as `string` so a new server-side tier can't
+// 500 the response; render an unrecognised one as the most cautious tier.
+export function asTier(key: string): Tier {
+  return (TIERS as readonly string[]).includes(key) ? (key as Tier) : "low";
+}
+
 export interface SlotValue {
   key: string;
   meta: ComponentMeta;

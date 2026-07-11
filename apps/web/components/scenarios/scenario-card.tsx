@@ -3,6 +3,7 @@ import { memo } from "react";
 import { cn } from "@/lib/cn";
 import { relativeStrengthPct } from "@/lib/scenario-ranking";
 import { familyColor, patternSubtype, prettyFamily, roleShort } from "@/lib/scenario-format";
+import { asTier } from "@/lib/score-components";
 import type { Scenario } from "@/lib/types";
 import { RankBadge } from "@/components/scenarios/scenario-bits";
 import { TapeMeter, TIER_TONE } from "@/components/ui/tape-meter";
@@ -34,7 +35,7 @@ export const ScenarioCard = memo(function ScenarioCard({
   const color = familyColor(scenario.family);
   const pct = relativeStrengthPct(scenario.score, topScore);
   // Bar length = relative strength; hue = absolute tier (different questions).
-  const tone = TIER_TONE[scenario.confidence_tier.key];
+  const tone = TIER_TONE[asTier(scenario.confidence_tier.key)];
   const formingRole =
     !scenario.is_complete && scenario.open_subtree ? scenario.open_subtree.role : null;
 

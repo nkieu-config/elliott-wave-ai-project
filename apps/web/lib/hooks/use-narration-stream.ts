@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { streamAnalyst, type AnalystMode, type PipelineConfig } from "../api";
-import type { CitationRef } from "../types";
+import type {
+  CitationRef,
+  CitationsFrame,
+  DoneFrame,
+  ErrorFrame,
+  StartFrame,
+  TokenFrame,
+} from "../types";
 
 export type Mode = AnalystMode;
 export type Status = "idle" | "streaming" | "done" | "error" | "cancelled";
@@ -118,22 +125,19 @@ export function useNarrationStream(
           },
           ac.signal,
         )) {
+          // Frame shapes come from the API's own models (lib/types.ts); a frame
+          // can still arrive malformed over the wire, so every field is re-checked.
           if (msg.event === "start") {
-            const f = parseFrame<{ model_id?: string }>(msg.data);
+            const f = parseFrame<Partial<StartFrame>>(msg.data);
             if (f?.model_id) setMode(mode, { modelId: f.model_id });
           } else if (msg.event === "token") {
-            const f = parseFrame<{ text?: unknown }>(msg.data);
+            const f = parseFrame<Partial<TokenFrame>>(msg.data);
             if (typeof f?.text !== "string") continue;
             n += 1;
             accumulated += f.text;
             setMode(mode, { tokens: n, text: accumulated });
           } else if (msg.event === "citations") {
-            const f = parseFrame<{
-              citations?: CitationRef[];
-              cached?: boolean;
-              fell_back?: boolean;
-              model_id?: string;
-            }>(msg.data);
+            const f = parseFrame<Partial<CitationsFrame>>(msg.data);
             if (f) {
               setMode(mode, {
                 citations: f.citations ?? [],
@@ -143,14 +147,14 @@ export function useNarrationStream(
               });
             }
           } else if (msg.event === "done") {
-            const f = parseFrame<{ gen_ms?: number }>(msg.data);
+            const f = parseFrame<Partial<DoneFrame>>(msg.data);
             setMode(mode, {
               status: "done",
               genMs: typeof f?.gen_ms === "number" ? f.gen_ms : null,
             });
             return;
           } else if (msg.event === "error") {
-            const f = parseFrame<{ message?: string }>(msg.data);
+            const f = parseFrame<Partial<ErrorFrame>>(msg.data);
             throw new Error(f?.message ?? "Server signalled an error.");
           }
         }

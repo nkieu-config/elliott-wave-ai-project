@@ -76,20 +76,3 @@ class QaRequest(BaseModel):
     force_refresh: bool = Field(default=False)
 
 
-class QaCitation(BaseModel):
-    page: int
-    claim_sentence: str
-
-
-class QaResponse(BaseModel):
-    question: str
-    answer: str
-    citations: list[QaCitation]
-    # Pages similarity surfaced — the answer's allowed-citation set.
-    retrieved_pages: list[int]
-    # True when the question fell below the theory-relevance floor (no LLM call).
-    out_of_scope: bool
-    # True when the gate rejected the answer (generic fallback returned).
-    fell_back: bool
-    cached: bool
-    model_id: str | None

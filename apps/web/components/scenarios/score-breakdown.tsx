@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { relativeStrengthPct } from "@/lib/scenario-ranking";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import {
+  asTier,
   calibratedPct,
   type ComponentGroup,
   GROUP_META,
@@ -214,8 +215,8 @@ export function ConvictionReadout({
   totalScenarios: number;
 }) {
   const pct = relativeStrengthPct(scenario.score, topScore);
-  const tier = scenario.confidence_tier;
-  const fg = TIER_FG[tier.key];
+  const tierKey = asTier(scenario.confidence_tier.key);
+  const fg = TIER_FG[tierKey];
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1">
@@ -240,12 +241,12 @@ export function ConvictionReadout({
         <span className="mb-0.5 flex items-baseline gap-1.5 text-[12px] ewl-num text-muted">
           <span className="text-text-dim">{scenario.score.toFixed(2)}</span>
           <span className="uppercase tracking-[0.1em] font-semibold" style={{ color: fg }}>
-            {tier.word}
+            {scenario.confidence_tier.word}
           </span>
         </span>
       </div>
       <div className="mt-2">
-        <TapeMeter fill={Math.max(2, pct)} tone={TIER_TONE[tier.key]} bare />
+        <TapeMeter fill={Math.max(2, pct)} tone={TIER_TONE[tierKey]} bare />
       </div>
     </div>
   );

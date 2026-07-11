@@ -9,7 +9,8 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from apps.api import pipeline_ops
-from apps.api.schemas import QaCitation, QaRequest, QaResponse
+from apps.api.schemas import QaRequest
+from apps.api.schemas_responses import QaCitation, QaResponse
 from apps.api.services import analyst_service
 from engine import Bar, Scenario
 

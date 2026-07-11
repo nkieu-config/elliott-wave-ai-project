@@ -11,7 +11,7 @@ import {
   useSelectedScenario,
 } from "@/lib/chart-store";
 import { cn } from "@/lib/cn";
-import { configParsers } from "@/lib/config";
+import { asScaleMode, configParsers } from "@/lib/config";
 import { useLayer1, usePipeline } from "@/lib/query";
 import { findSelectedScenario, resolveScopeNode } from "@/lib/scenario-format";
 import { DrillBreadcrumb } from "@/components/chart/drill-breadcrumb";
@@ -154,7 +154,7 @@ export function ChartShell() {
           {query.data ? (
             <WaveChart
               symbol={query.data.meta.symbol}
-              scaleMode={query.data.meta.config.scale_mode}
+              scaleMode={asScaleMode(query.data.meta.config.scale_mode)}
               bars={query.data.bars}
               activePivots={query.data.active_pivots}
               rawPivots={query.data.raw_pivots}
