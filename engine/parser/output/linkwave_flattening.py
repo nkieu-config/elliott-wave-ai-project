@@ -3,6 +3,7 @@ from __future__ import annotations
 from engine.types import LinkSet, NestingLevel, WaveNode, WaveRole
 
 from ..types import _Context, _Leg
+from ..wave_shape import flatten_linkwave
 
 __all__ = [
     "_flatten_linkwave_children",
@@ -17,25 +18,12 @@ def _flatten_linkwave_children(
 ) -> tuple[list[WaveNode], list[LinkSet]]:
     from .tree_builders import _leg_to_wavenode_with_parent
 
-    flat: list[WaveNode] = []
-    sets: list[LinkSet] = []
-    for i, lg in enumerate(set_and_link_legs):
-        if i % 2 == 0:
-            if lg.pattern_kind is None or not lg.sub_legs:
-                flat.append(_leg_to_wavenode_with_parent(lg, parent, nesting_level))
-                continue
-            start_idx = len(flat)
-            for sub in lg.sub_legs:
-                flat.append(_leg_to_wavenode_with_parent(sub, parent, nesting_level))
-            sets.append(
-                LinkSet(
-                    pattern_kind=lg.pattern_kind,
-                    leg_start=start_idx,
-                    leg_end=len(flat) - 1,
-                )
-            )
-        else:
-            flat.append(_leg_to_wavenode_with_parent(lg, parent, nesting_level))
+    # Same walk the verifier input uses — the tree just wants parented nodes, and has
+    # no use for the link segments.
+    flat, sets, _links = flatten_linkwave(
+        set_and_link_legs,
+        lambda lg: _leg_to_wavenode_with_parent(lg, parent, nesting_level),
+    )
     return flat, sets
 
 

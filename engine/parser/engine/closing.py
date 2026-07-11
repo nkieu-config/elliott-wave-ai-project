@@ -5,7 +5,7 @@ from engine.adaptive import (
     expected_direction,
 )
 from engine.degree import gann_band_ok
-from engine.parser.families import close_pregate_ok, incremental_ok
+from engine.parser.families import close_pregate_ok, incremental_ok, run_verifier
 from engine.parser.gates import _bar_span
 from engine.parser.types import _Context, _Hypothesis, _Leg
 from engine.types import (
@@ -14,12 +14,10 @@ from engine.types import (
     WaveRole,
 )
 
-from .verifier_adapter import _run_verifier
-
 
 def _run_and_cache_verifier(ctx: _Context, mode: ScaleMode) -> bool:
     # Caller must have checked ctx.is_complete and ctx.final_kind is None. False iff rejected.
-    result = _run_verifier(ctx.family, ctx.legs, mode)
+    result = run_verifier(ctx.family, ctx.legs, mode)
     if result is None:
         return False
     ctx.final_kind, ctx.rules_log = result

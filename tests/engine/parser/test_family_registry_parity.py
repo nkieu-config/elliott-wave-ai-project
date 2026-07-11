@@ -74,14 +74,6 @@ def test_family_specs_cover_every_family():
     assert set(FAMILY_SPECS) == set(ALL_FAMILIES)
 
 
-def test_input_adapter_matches_structure():
-    from engine.parser.families import FAMILY_SPECS
-
-    for spec in FAMILY_SPECS.values():
-        expected = "link" if spec.structure.is_link else "simple"
-        assert spec.input_adapter == expected, spec.family
-
-
 @pytest.mark.parametrize("family", ALL_FAMILIES)
 def test_max_and_min_legs(family):
     max_legs, min_legs, _ = _STRUCT[family]

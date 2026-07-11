@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from engine.adaptive import Family
 from engine.parser.gates import (
@@ -18,7 +18,9 @@ from engine.parser.gates import (
     bands_for_family,
 )
 from engine.parser.leg_structure import LEG_STRUCTURE, LegStructure
-from engine.types import PatternKind, RuleResult, ScaleMode, Segment, WaveRole
+from engine.parser.types import _Leg
+from engine.parser.wave_shape import flatten_linkwave, leg_to_wavenode, legs_to_segments
+from engine.types import LinkSet, PatternKind, RuleResult, ScaleMode, Segment, WaveNode, WaveRole
 from engine.verifiers import (
     verify_3wave,
     verify_5wave_sideway,
@@ -30,11 +32,35 @@ from engine.verifiers import (
 if TYPE_CHECKING:
     from engine.parser.types import _Context
 
-VerifierFn = Callable[..., tuple[PatternKind, list[RuleResult]] | None]
-InputAdapter = Literal["simple", "link"]
+Verdict = tuple[PatternKind, list[RuleResult]] | None
+
+# The two shapes a verifier reads. A pattern is a run of segments; a linkwave is sets
+# of sub-waves with the links between them.
+SimpleVerifier = Callable[[list[Segment], ScaleMode], Verdict]
+LinkVerifier = Callable[[list[LinkSet], list[WaveNode], list[Segment], ScaleMode], Verdict]
+
+# What the registry exposes: legs in, verdict out. Each family binds its own input
+# shape at construction (below), so the beam loop never dispatches on it.
+VerifierFn = Callable[[list[_Leg], ScaleMode], Verdict]
+
 IncrementalFn = Callable[["_Context", WaveRole, float, ScaleMode, "int | None"], bool]
 OpenPregateFn = Callable[["_Context", WaveRole, Segment, ScaleMode], bool]
 ClosePregateFn = Callable[["_Context", "_Context", WaveRole, ScaleMode], bool]
+
+
+def _simple(verifier: SimpleVerifier) -> VerifierFn:
+    def run(legs: list[_Leg], mode: ScaleMode) -> Verdict:
+        return verifier(legs_to_segments(legs), mode)
+
+    return run
+
+
+def _link(verifier: LinkVerifier) -> VerifierFn:
+    def run(legs: list[_Leg], mode: ScaleMode) -> Verdict:
+        children, sets, links = flatten_linkwave(legs, leg_to_wavenode)
+        return verifier(sets, children, links, mode)
+
+    return run
 
 
 @dataclass(frozen=True)
@@ -42,8 +68,6 @@ class FamilySpec:
     family: Family
     structure: LegStructure
     verifier: VerifierFn
-    # simple → verifier(virtual_segments, mode); link → verifier(sets, children, links, mode)
-    input_adapter: InputAdapter
     incremental: IncrementalFn
     is_root: bool
     set1_inner_families: tuple[Family, ...]
@@ -76,7 +100,6 @@ def _incremental_for(family: Family) -> IncrementalFn:
 def _spec(
     family: Family,
     verifier: VerifierFn,
-    input_adapter: InputAdapter,
     *,
     is_root: bool,
     set1: tuple[Family, ...] = (),
@@ -87,7 +110,6 @@ def _spec(
         family=family,
         structure=LEG_STRUCTURE[family],
         verifier=verifier,
-        input_adapter=input_adapter,
         incremental=_incremental_for(family),
         is_root=is_root,
         set1_inner_families=set1,
@@ -98,22 +120,28 @@ def _spec(
 
 # Insertion order is load-bearing: the seed family sets below derive root / set_1 order from it.
 FAMILY_SPECS: dict[Family, FamilySpec] = {
-    "5W_TREND": _spec("5W_TREND", verify_5wave_trend, "simple", is_root=True),
-    "5W_SIDEWAY": _spec("5W_SIDEWAY", verify_5wave_sideway, "simple", is_root=True),
-    "3W": _spec("3W", verify_3wave, "simple", is_root=True),
+    "5W_TREND": _spec("5W_TREND", _simple(verify_5wave_trend), is_root=True),
+    "5W_SIDEWAY": _spec("5W_SIDEWAY", _simple(verify_5wave_sideway), is_root=True),
+    "3W": _spec("3W", _simple(verify_3wave), is_root=True),
     "LINK_T": _spec(
         "LINK_T",
-        verify_link_t,
-        "link",
+        _link(verify_link_t),
         is_root=True,
         set1=("3W",),
         open_pregate=_link_t_open_size_ok,
         close_pregate=_link_t_r7_close_ok,
     ),
-    "LINK_S": _spec("LINK_S", verify_link_s, "link", is_root=True, set1=("3W", "5W_SIDEWAY")),
+    "LINK_S": _spec("LINK_S", _link(verify_link_s), is_root=True, set1=("3W", "5W_SIDEWAY")),
     # LINK_SE is verify-only — emerges from verify_link_s promotion, never seeded.
-    "LINK_SE": _spec("LINK_SE", verify_link_s, "link", is_root=False),
+    "LINK_SE": _spec("LINK_SE", _link(verify_link_s), is_root=False),
 }
+
+
+def run_verifier(family: Family, legs: list[_Leg], mode: ScaleMode) -> Verdict:
+    spec = FAMILY_SPECS.get(family)
+    if spec is None:
+        return None
+    return spec.verifier(legs, mode)
 
 
 def incremental_ok(
