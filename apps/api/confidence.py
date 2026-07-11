@@ -1,4 +1,4 @@
-"""Headline-score → confidence tier. Cut-offs mirror `apps/web/lib/confidence.ts`; keep in sync."""
+"""Headline-score → confidence tier. Sole source — the web reads `confidence_tier` off the wire."""
 
 from __future__ import annotations
 

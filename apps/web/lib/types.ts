@@ -106,13 +106,20 @@ export interface SampleData {
     symbol: string;
     period: string;
     timeframe: string;
-    exported_at: string;
+    generated_at: string;
     config: {
       scale_mode: ScaleMode;
       atr_period: number;
       atr_multiplier: number;
       atr_floor: number;
       min_bars_between: number;
+      k_sigma: number;
+      log_tol_fib: number;
+      pull_depth_lo: number;
+      pull_depth_hi: number;
+      pull_depth_tol: number;
+      pivot_window: number;
+      commitment_curve: string;
     };
   };
   bars: Bar[];
@@ -195,7 +202,7 @@ export interface PriceMove {
 export type WaveStage = "complete" | "early" | "mid" | "late" | "overshot" | "unknown";
 
 export interface DecisionSummary {
-  current: PriceMove;
+  current: PriceMove | null;
   target_low: PriceMove | null;
   target_high: PriceMove | null;
   invalidation: PriceMove | null;

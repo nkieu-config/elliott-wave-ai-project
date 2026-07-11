@@ -1,7 +1,6 @@
 import { CheckCircle2, GitCompare, Hourglass } from "lucide-react";
 import { memo } from "react";
 import { cn } from "@/lib/cn";
-import { confidenceTier } from "@/lib/confidence";
 import { relativeStrengthPct } from "@/lib/scenario-ranking";
 import { familyColor, patternSubtype, prettyFamily, roleShort } from "@/lib/scenario-format";
 import type { Scenario } from "@/lib/types";
@@ -35,7 +34,7 @@ export const ScenarioCard = memo(function ScenarioCard({
   const color = familyColor(scenario.family);
   const pct = relativeStrengthPct(scenario.score, topScore);
   // Bar length = relative strength; hue = absolute tier (different questions).
-  const tone = TIER_TONE[confidenceTier(scenario.score).key];
+  const tone = TIER_TONE[scenario.confidence_tier.key];
   const formingRole =
     !scenario.is_complete && scenario.open_subtree ? scenario.open_subtree.role : null;
 

@@ -2,7 +2,6 @@
 
 import { ChevronRight, Star } from "lucide-react";
 import { useDisclosure } from "@/lib/hooks/use-disclosure";
-import { confidenceTier } from "@/lib/confidence";
 import { cn } from "@/lib/cn";
 import { relativeStrengthPct } from "@/lib/scenario-ranking";
 import { AnimatedNumber } from "@/components/ui/animated-number";
@@ -215,7 +214,7 @@ export function ConvictionReadout({
   totalScenarios: number;
 }) {
   const pct = relativeStrengthPct(scenario.score, topScore);
-  const tier = confidenceTier(scenario.score);
+  const tier = scenario.confidence_tier;
   const fg = TIER_FG[tier.key];
   return (
     <div>

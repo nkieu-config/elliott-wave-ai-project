@@ -99,8 +99,11 @@ export function calibratedPct(value: number, opts: { parent: boolean }): number 
   return Math.round(frac * 100);
 }
 
-// Tier and ConfidenceTier are the same union; TIER_FG lives in confidence.ts.
-export { TIER_FG } from "./confidence";
+export const TIER_FG: Record<Tier, string> = {
+  low: "var(--color-down)",
+  mid: "var(--color-warn)",
+  high: "var(--color-up)",
+};
 
 export interface SlotValue {
   key: string;
