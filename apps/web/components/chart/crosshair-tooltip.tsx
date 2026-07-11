@@ -1,55 +1,12 @@
 "use client";
 
-import type { IChartApi, MouseEventParams } from "lightweight-charts";
-import { useEffect, useState } from "react";
 import { ROLE_COLOR, fmtPrice, type CrosshairData } from "@/lib/chart/helpers";
 import { cn } from "@/lib/cn";
 import { useLocale } from "@/lib/locale";
 import { gregorianLocale } from "@/lib/resolve-locale";
 import { roleShort } from "@/lib/scenario-format";
-import type { Bar } from "@/lib/types";
 
-export function CrosshairOverlay({
-  chartRef,
-  containerRef,
-  barIndex,
-  findRoleAtTime,
-}: {
-  chartRef: React.RefObject<IChartApi | null>;
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  barIndex: Map<number, Bar>;
-  findRoleAtTime: (t: number) => string | null;
-}) {
-  const [data, setData] = useState<CrosshairData | null>(null);
-
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    const handler = (param: MouseEventParams) => {
-      const t = typeof param.time === "number" ? param.time : null;
-      const pt = param.point;
-      if (t == null || !pt) {
-        setData(null);
-        return;
-      }
-      const bar = barIndex.get(t);
-      if (!bar) {
-        setData(null);
-        return;
-      }
-      // Read width here, not in render, to keep layout reads out of render.
-      const w = containerRef.current?.clientWidth ?? 0;
-      setData({ time: t, bar, role: findRoleAtTime(t), x: pt.x, y: pt.y, w });
-    };
-    chart.subscribeCrosshairMove(handler);
-    return () => chart.unsubscribeCrosshairMove(handler);
-  }, [chartRef, containerRef, barIndex, findRoleAtTime]);
-
-  if (!data) return null;
-  return <CrosshairTooltip data={data} />;
-}
-
-function CrosshairTooltip({ data }: { data: CrosshairData }) {
+export function CrosshairTooltip({ data }: { data: CrosshairData }) {
   const locale = useLocale();
   // Flip to the opposite side near the right edge so it never covers the price
   // scale. Width from data.w to avoid a layout read during render.

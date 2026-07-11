@@ -25,17 +25,19 @@ import {
   resolveBottleneckLeg,
   toUTC,
   toUTCNum,
+  type CrosshairData,
   type LegendRole,
   type PerLegEntry,
 } from "@/lib/chart/helpers";
-import { gregorianLocale } from "@/lib/resolve-locale";
 import type { ChartLayerKey } from "@/lib/chart-store";
 import { isDrillable, scopeLegs } from "@/lib/scenario-format";
 import type { Bar, Layer1Result, Pivot, Scenario, ScaleMode } from "@/lib/types";
+import { gregorianLocale } from "@/lib/resolve-locale";
 
 type SubLegSeries = { rootRole: string; series: ISeriesApi<"Line">; baseColor: string };
 
-export interface ChartRefs {
+// lightweight-charts stops here. Nothing below leaves the module.
+interface ChartRefs {
   chartRef: RefObject<IChartApi | null>;
   candlesRef: RefObject<ISeriesApi<"Candlestick"> | null>;
   overlaysRef: RefObject<ISeriesApi<"Line">[]>;
@@ -43,10 +45,47 @@ export interface ChartRefs {
   markersRef: RefObject<ISeriesMarkersPluginApi<Time> | null>;
 }
 
+export interface BottleneckRect {
+  left: number;
+  width: number;
+  legIdx: number;
+}
+
+export interface WaveChartParams {
+  containerRef: RefObject<HTMLDivElement | null>;
+  locale: string;
+  scaleMode: ScaleMode;
+  bars: Bar[];
+  activePivots: Pivot[];
+  rawPivots: Pivot[];
+  selectedScenario: Scenario | null;
+  compareScenario: Scenario | null;
+  /** Drill scope — indices into successive `drawableLegs`. Empty = root. */
+  drillPath: number[];
+  onDrill: (path: number[]) => void;
+  layers: Record<ChartLayerKey, boolean>;
+  layer1: Layer1Result | null;
+  /** Legend hover/isolate; dims the sub-wave layer. */
+  activeRole: LegendRole | null;
+}
+
+export interface WaveChartApi {
+  /** Some leg in the current scope has sub-waves to drill into. */
+  hasDrillable: boolean;
+  /** Pixel band over the bottleneck leg, for the component to draw. */
+  bottleneckRect: BottleneckRect | null;
+  /** Pixel x of the last bar, for the component to draw the "Latest" rule. */
+  latestX: number | null;
+  crosshair: CrosshairData | null;
+  canSetRange: boolean;
+  showRange: (months: number | "all") => void;
+  takeScreenshot: () => HTMLCanvasElement | null;
+}
+
 const SANS_FALLBACK =
   '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif';
 
-export function useChartInstance(
+function useChartInstance(
   containerRef: RefObject<HTMLDivElement | null>,
   scaleMode: ScaleMode,
   bars: Bar[],
@@ -169,29 +208,27 @@ export function useChartInstance(
   return { chartRef, candlesRef, overlaysRef, subLegSeriesRef, markersRef, chartReady };
 }
 
-interface DrillParams {
-  chartRef: RefObject<IChartApi | null>;
-  chartReady: boolean;
-  selectedScenario: Scenario | null;
-  drillPath: number[];
-  drillKey: string;
-  onDrill: (path: number[]) => void;
-}
-
-export interface LegSpan {
+interface LegSpan {
   role: string;
   start: number;
   end: number;
 }
 
-export function useChartDrill({
+function useChartDrill({
   chartRef,
   chartReady,
   selectedScenario,
   drillPath,
   drillKey,
   onDrill,
-}: DrillParams) {
+}: {
+  chartRef: RefObject<IChartApi | null>;
+  chartReady: boolean;
+  selectedScenario: Scenario | null;
+  drillPath: number[];
+  drillKey: string;
+  onDrill: (path: number[]) => void;
+}) {
   // Scope legs (not leaves) so the hover label reads the leg the cursor is in.
   const legSpans = useMemo<LegSpan[]>(() => {
     if (!selectedScenario) return [];
@@ -276,23 +313,9 @@ export function useChartDrill({
   return { hasDrillable, findRoleAtTime };
 }
 
-interface OverlaysParams extends ChartRefs {
-  chartReady: boolean;
-  bars: Bar[];
-  activePivots: Pivot[];
-  rawPivots: Pivot[];
-  selectedScenario: Scenario | null;
-  compareScenario: Scenario | null;
-  drillPath: number[];
-  drillKey: string;
-  layers: Record<ChartLayerKey, boolean>;
-  layer1: Layer1Result | null;
-  activeRole: LegendRole | null;
-}
-
 // HTML band overlays (bottleneck, latest) return pixel positions for the
 // component to render; everything else draws imperatively.
-export function useChartOverlays({
+function useChartOverlays({
   chartRef,
   candlesRef,
   overlaysRef,
@@ -309,15 +332,25 @@ export function useChartOverlays({
   layers,
   layer1,
   activeRole,
-}: OverlaysParams) {
+}: ChartRefs & {
+  chartReady: boolean;
+  bars: Bar[];
+  activePivots: Pivot[];
+  rawPivots: Pivot[];
+  selectedScenario: Scenario | null;
+  compareScenario: Scenario | null;
+  drillPath: number[];
+  drillKey: string;
+  layers: Record<ChartLayerKey, boolean>;
+  layer1: Layer1Result | null;
+  activeRole: LegendRole | null;
+}) {
   // Price lines are owned by the candle series (not chart.removeSeries-able),
   // so they need their own tracked pool to clear.
   const priceLinesRef = useRef<IPriceLine[]>([]);
   // HTML overlay synced to the timeScale — no vertical-band primitive.
   // null = layer off or data missing.
-  const [bottleneckRect, setBottleneckRect] = useState<
-    { left: number; width: number; legIdx: number } | null
-  >(null);
+  const [bottleneckRect, setBottleneckRect] = useState<BottleneckRect | null>(null);
   const [latestX, setLatestX] = useState<number | null>(null);
 
   useEffect(() => {
@@ -519,4 +552,157 @@ export function useChartOverlays({
   }, [chartRef, chartReady, layers.latest, bars]);
 
   return { bottleneckRect, latestX };
+}
+
+// Crosshair state lives here, not in the tooltip: the tooltip is then a pure
+// render of CrosshairData and never touches the chart library.
+function useCrosshair({
+  chartRef,
+  containerRef,
+  chartReady,
+  bars,
+  findRoleAtTime,
+}: {
+  chartRef: RefObject<IChartApi | null>;
+  containerRef: RefObject<HTMLDivElement | null>;
+  chartReady: boolean;
+  bars: Bar[];
+  findRoleAtTime: (t: number) => string | null;
+}): CrosshairData | null {
+  const [data, setData] = useState<CrosshairData | null>(null);
+
+  const barIndex = useMemo(() => {
+    const m = new Map<number, Bar>();
+    for (const b of bars) m.set(toUTC(b.time), b);
+    return m;
+  }, [bars]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !chartReady) return;
+    const handler = (param: MouseEventParams) => {
+      const t = typeof param.time === "number" ? param.time : null;
+      const pt = param.point;
+      if (t == null || !pt) {
+        setData(null);
+        return;
+      }
+      const bar = barIndex.get(t);
+      if (!bar) {
+        setData(null);
+        return;
+      }
+      // Read width here, not in render, to keep layout reads out of render.
+      const w = containerRef.current?.clientWidth ?? 0;
+      setData({ time: t, bar, role: findRoleAtTime(t), x: pt.x, y: pt.y, w });
+    };
+    chart.subscribeCrosshairMove(handler);
+    return () => chart.unsubscribeCrosshairMove(handler);
+  }, [chartRef, containerRef, chartReady, barIndex, findRoleAtTime]);
+
+  return data;
+}
+
+/**
+ * The chart, as the app sees it: domain values in, domain values out.
+ *
+ * The lightweight-charts instance, its series, and its markers plugin are refs
+ * held inside this module. They used to be the return type — five ref types the
+ * component received only to hand straight back to the next hook — which is why
+ * the drill and overlay logic had no reachable test surface.
+ */
+export function useWaveChart({
+  containerRef,
+  locale,
+  scaleMode,
+  bars,
+  activePivots,
+  rawPivots,
+  selectedScenario,
+  compareScenario,
+  drillPath,
+  onDrill,
+  layers,
+  layer1,
+  activeRole,
+}: WaveChartParams): WaveChartApi {
+  // Stable dep key — nuqs returns a fresh drillPath array each render.
+  const drillKey = drillPath.join(".");
+
+  const refs = useChartInstance(containerRef, scaleMode, bars, locale);
+  const { chartRef, chartReady } = refs;
+
+  const { hasDrillable, findRoleAtTime } = useChartDrill({
+    chartRef,
+    chartReady,
+    selectedScenario,
+    drillPath,
+    drillKey,
+    onDrill,
+  });
+
+  const { bottleneckRect, latestX } = useChartOverlays({
+    ...refs,
+    chartReady,
+    bars,
+    activePivots,
+    rawPivots,
+    selectedScenario,
+    compareScenario,
+    drillPath,
+    drillKey,
+    layers,
+    layer1,
+    activeRole,
+  });
+
+  const crosshair = useCrosshair({
+    chartRef,
+    containerRef,
+    chartReady,
+    bars,
+    findRoleAtTime,
+  });
+
+  const firstBarTime = useMemo(
+    () => (bars.length > 0 ? toUTC(bars[0].time) : null),
+    [bars],
+  );
+  const lastBarTime = useMemo(
+    () => (bars.length > 0 ? toUTC(bars[bars.length - 1].time) : null),
+    [bars],
+  );
+
+  const showRange = useCallback(
+    (months: number | "all") => {
+      const chart = chartRef.current;
+      if (!chart || !lastBarTime || !firstBarTime) return;
+      if (months === "all") {
+        chart.timeScale().fitContent();
+        return;
+      }
+      const SECS_PER_MONTH = 30 * 24 * 60 * 60;
+      const from = Math.max(
+        firstBarTime,
+        lastBarTime - months * SECS_PER_MONTH,
+      ) as UTCTimestamp;
+      chart.timeScale().setVisibleRange({ from, to: lastBarTime });
+    },
+    [chartRef, lastBarTime, firstBarTime],
+  );
+
+  const takeScreenshot = useCallback(
+    () => chartRef.current?.takeScreenshot() ?? null,
+    [chartRef],
+  );
+
+  return {
+    hasDrillable,
+    bottleneckRect,
+    latestX,
+    crosshair,
+    canSetRange: lastBarTime != null,
+    showRange,
+    takeScreenshot,
+  };
 }

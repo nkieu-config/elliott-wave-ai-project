@@ -1,21 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type UTCTimestamp } from "lightweight-charts";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { composeWatermark, toUTC, type LegendRole } from "@/lib/chart/helpers";
+import { composeWatermark, type LegendRole } from "@/lib/chart/helpers";
 import { useLocale } from "@/lib/locale";
 import { TOAST_DURATION } from "@/lib/ui";
 import type { ChartLayerKey } from "@/lib/chart-store";
 import { prettyFamily } from "@/lib/scenario-format";
 import type { Bar, Layer1Result, Pivot, Scenario, ScaleMode } from "@/lib/types";
 import { ChartLegend, ChartToolbar, TimeChips } from "@/components/chart/chart-chrome";
-import { CrosshairOverlay } from "@/components/chart/crosshair-tooltip";
-import {
-  useChartDrill,
-  useChartInstance,
-  useChartOverlays,
-} from "@/components/chart/use-wave-chart";
+import { CrosshairTooltip } from "@/components/chart/crosshair-tooltip";
+import { useWaveChart } from "@/components/chart/use-wave-chart";
 
 interface Props {
   symbol: string;
@@ -49,13 +44,8 @@ export function WaveChart({
   drillPath,
   onDrill,
 }: Props) {
-  // Stable dep key — nuqs returns a fresh drillPath array each render.
-  const drillKey = drillPath.join(".");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const locale = useLocale();
-
-  const { chartRef, candlesRef, overlaysRef, subLegSeriesRef, markersRef, chartReady } =
-    useChartInstance(containerRef, scaleMode, bars, locale);
 
   // isolatedRole sticky (tap), hoveredRole transient (mouse) — active = either,
   // so touch users without hover can still highlight.
@@ -70,45 +60,34 @@ export function WaveChart({
     setHoveredRole(null);
   }, [selectedScenario?.id]);
 
-  const { hasDrillable, findRoleAtTime } = useChartDrill({
-    chartRef,
-    chartReady,
-    selectedScenario,
-    drillPath,
-    drillKey,
-    onDrill,
-  });
-
-  const { bottleneckRect, latestX } = useChartOverlays({
-    chartRef,
-    candlesRef,
-    overlaysRef,
-    subLegSeriesRef,
-    markersRef,
-    chartReady,
+  const {
+    hasDrillable,
+    bottleneckRect,
+    latestX,
+    crosshair,
+    canSetRange,
+    showRange,
+    takeScreenshot,
+  } = useWaveChart({
+    containerRef,
+    locale,
+    scaleMode,
     bars,
     activePivots,
     rawPivots,
     selectedScenario,
     compareScenario,
     drillPath,
-    drillKey,
+    onDrill,
     layers,
     layer1,
     activeRole,
   });
 
-  const barIndex = useMemo(() => {
-    const m = new Map<number, Bar>();
-    for (const b of bars) m.set(toUTC(b.time), b);
-    return m;
-  }, [bars]);
-
   const onExport = useCallback(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
+    const chartCanvas = takeScreenshot();
+    if (!chartCanvas) return;
     try {
-      const chartCanvas = chart.takeScreenshot();
       const dateStr = new Date().toISOString().slice(0, 10);
       const fileName = `ewl-${symbol}-${scaleMode}-${dateStr}.png`;
       const composed = composeWatermark(chartCanvas, {
@@ -140,31 +119,7 @@ export function WaveChart({
         action: { label: "Retry", onClick: onExport },
       });
     }
-  }, [chartRef, symbol, scaleMode, selectedScenario, compareScenario, locale]);
-
-  const lastBarTime = useMemo(
-    () => (bars.length > 0 ? toUTC(bars[bars.length - 1].time) : null),
-    [bars],
-  );
-  const firstBarTime = useMemo(
-    () => (bars.length > 0 ? toUTC(bars[0].time) : null),
-    [bars],
-  );
-
-  const applyRange = useCallback(
-    (months: number | "all") => {
-      const chart = chartRef.current;
-      if (!chart || !lastBarTime || !firstBarTime) return;
-      if (months === "all") {
-        chart.timeScale().fitContent();
-        return;
-      }
-      const SECS_PER_MONTH = 30 * 24 * 60 * 60;
-      const from = Math.max(firstBarTime, lastBarTime - months * SECS_PER_MONTH) as UTCTimestamp;
-      chart.timeScale().setVisibleRange({ from, to: lastBarTime });
-    },
-    [chartRef, lastBarTime, firstBarTime],
-  );
+  }, [takeScreenshot, symbol, scaleMode, selectedScenario, compareScenario, locale]);
 
   return (
     // Size-query container so the bottom rail collapses on the CHART's width,
@@ -272,17 +227,10 @@ export function WaveChart({
             onIsolate={(r) => setIsolatedRole((prev) => (prev === r ? null : r))}
             onHover={setHoveredRole}
           />
-          <TimeChips onPick={applyRange} disabled={!lastBarTime} />
+          <TimeChips onPick={showRange} disabled={!canSetRange} />
         </div>
 
-        {chartReady && (
-          <CrosshairOverlay
-            chartRef={chartRef}
-            containerRef={containerRef}
-            barIndex={barIndex}
-            findRoleAtTime={findRoleAtTime}
-          />
-        )}
+        {crosshair && <CrosshairTooltip data={crosshair} />}
       </div>
     </div>
   );
