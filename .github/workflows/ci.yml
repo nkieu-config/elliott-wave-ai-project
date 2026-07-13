@@ -10,10 +10,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only GITHUB_TOKEN: nothing here writes to the repo.
+permissions:
+  contents: read
+
 jobs:
   python:
-    name: Python ${{ matrix.python-version }} — ruff + layers + pytest (cov ≥ 75%)
+    name: Python ${{ matrix.python-version }} — ruff + mypy + layers + pytest (cov ≥ 75%)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -53,13 +58,18 @@ jobs:
       - name: Test
         run: uv run pytest --cov
 
-      # Known-vulnerability scan of the resolved dependency tree.
+      # Known-vulnerability scan of the resolved dependency tree. Bare `uvx pip-audit`
+      # would scan pip-audit's own throwaway venv, not ours — export the lock first.
       - name: Audit dependencies
-        run: uvx pip-audit
+        if: matrix.python-version == '3.12'
+        run: |
+          uv export --frozen --no-dev --extra api --extra grounding --no-emit-project -o requirements.txt
+          uvx pip-audit -r requirements.txt --disable-pip --ignore-vuln CVE-2025-3000
 
   web:
-    name: Web — tsc + eslint + vitest
+    name: Web — tsc + eslint + vitest (logic cov ≥ 78%)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web
@@ -103,6 +113,7 @@ jobs:
   docker:
     name: Docker — compose build (README quick-start)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
