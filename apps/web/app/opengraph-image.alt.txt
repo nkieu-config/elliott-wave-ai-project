@@ -1,0 +1,1 @@
+Elliott Wave Lab — Elliott wave structure detection on log-scale price charts
