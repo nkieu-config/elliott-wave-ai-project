@@ -35,6 +35,7 @@ export type Segment = Wire<"SegmentOut">;
 // Only populated on Wave nodes whose pattern_kind is LINK_T/LINK_S/LINK_SE.
 export type LinkSet = Wire<"LinkSetOut">;
 export type Wave = Wire<"WaveOut">;
+export type ClosedWave = Wave & { span_end: NonNullable<Wave["span_end"]> };
 
 export type ConfidenceTierInfo = Wire<"ConfidenceTierOut">;
 export type ScoreComponents = Wire<"ScenarioOut">["score_components"];

@@ -21,6 +21,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { drawOverlays } from "@/lib/chart/draw-overlays";
+import type { OverlayLayers } from "@/lib/chart/draw-overlays";
 import {
   resolveBottleneckLeg,
   toUTC,
@@ -236,19 +237,17 @@ function useChartDrill({
       .map((l) => ({
         role: l.role,
         start: toUTCNum(l.span_start.time),
-        end: toUTCNum(l.span_end!.time),
+        end: toUTCNum(l.span_end.time),
       }))
       .sort((a, b) => a.start - b.start);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedScenario, drillKey]);
+  }, [selectedScenario, drillPath]);
 
   const hasDrillable = useMemo(
     () =>
       selectedScenario
         ? scopeLegs(selectedScenario, drillPath).some(isDrillable)
         : false,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedScenario, drillKey],
+    [selectedScenario, drillPath],
   );
 
   const findRoleAtTime = useCallback(
@@ -272,7 +271,7 @@ function useChartDrill({
       const legs = scopeLegs(selectedScenario, drillPath);
       for (let i = 0; i < legs.length; i++) {
         const leg = legs[i];
-        if (!isDrillable(leg) || !leg.span_end) continue;
+        if (!isDrillable(leg)) continue;
         const start = toUTCNum(leg.span_start.time);
         const end = toUTCNum(leg.span_end.time);
         if (t >= start && t <= end) {
@@ -283,8 +282,7 @@ function useChartDrill({
     };
     chart.subscribeClick(handler);
     return () => chart.unsubscribeClick(handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartReady, selectedScenario, drillKey, onDrill]);
+  }, [chartRef, chartReady, selectedScenario, drillPath, onDrill]);
 
   // Drill zoom: fit the time axis to the scope span on drill, refit the whole
   // count on reset. Track prev scope so we refit only when leaving a drill,
@@ -296,9 +294,9 @@ function useChartDrill({
     const prev = prevDrillKeyRef.current;
     prevDrillKeyRef.current = drillKey;
     const legs = scopeLegs(selectedScenario, drillPath);
-    if (drillPath.length > 0 && legs.length > 0 && legs[legs.length - 1].span_end) {
+    if (drillPath.length > 0 && legs.length > 0) {
       const start = toUTCNum(legs[0].span_start.time);
-      const end = toUTCNum(legs[legs.length - 1].span_end!.time);
+      const end = toUTCNum(legs[legs.length - 1].span_end.time);
       const pad = Math.max(1, Math.round((end - start) * 0.08));
       chart.timeScale().setVisibleRange({
         from: (start - pad) as UTCTimestamp,
@@ -307,8 +305,7 @@ function useChartDrill({
     } else if (prev !== "" && drillPath.length === 0) {
       chart.timeScale().fitContent();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartReady, selectedScenario, drillKey]);
+  }, [chartRef, chartReady, selectedScenario, drillPath, drillKey]);
 
   return { hasDrillable, findRoleAtTime };
 }
@@ -328,7 +325,6 @@ function useChartOverlays({
   selectedScenario,
   compareScenario,
   drillPath,
-  drillKey,
   layers,
   layer1,
   activeRole,
@@ -340,7 +336,6 @@ function useChartOverlays({
   selectedScenario: Scenario | null;
   compareScenario: Scenario | null;
   drillPath: number[];
-  drillKey: string;
   layers: Record<ChartLayerKey, boolean>;
   layer1: Layer1Result | null;
   activeRole: LegendRole | null;
@@ -352,6 +347,33 @@ function useChartOverlays({
   // null = layer off or data missing.
   const [bottleneckRect, setBottleneckRect] = useState<BottleneckRect | null>(null);
   const [latestX, setLatestX] = useState<number | null>(null);
+
+  const drawLayers = useMemo<OverlayLayers>(
+    () => ({
+      raw_zigzag: layers.raw_zigzag,
+      trendline: layers.trendline,
+      in_progress: layers.in_progress,
+    }),
+    [layers.raw_zigzag, layers.trendline, layers.in_progress],
+  );
+
+  const activeRoleRef = useRef(activeRole);
+  activeRoleRef.current = activeRole;
+
+  const applyDimming = useCallback(
+    (role: LegendRole | null) => {
+      const hasActive = role != null;
+      for (const { rootRole, series, baseColor } of subLegSeriesRef.current) {
+        const isActive = rootRole === role;
+        series.applyOptions({
+          // 55=33% default dim, full when isolated, 22=13% for faded peers.
+          color: !hasActive ? `${baseColor}55` : isActive ? baseColor : `${baseColor}22`,
+          lineWidth: isActive ? 2 : 1,
+        });
+      }
+    },
+    [subLegSeriesRef],
+  );
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -369,7 +391,7 @@ function useChartOverlays({
       selectedScenario,
       compareScenario,
       drillPath,
-      layers,
+      layers: drawLayers,
     });
     overlaysRef.current = overlays;
     subLegSeriesRef.current = subLegSeries;
@@ -383,51 +405,30 @@ function useChartOverlays({
       }
     }
 
-    // drillPath read via stable drillKey; the array itself churns every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    applyDimming(activeRoleRef.current);
   }, [
+    chartRef,
+    candlesRef,
+    overlaysRef,
+    subLegSeriesRef,
+    markersRef,
     chartReady,
     bars,
     activePivots,
     rawPivots,
     selectedScenario,
     compareScenario,
-    // Only the layer keys this effect reads — the other layers have their own
-    // effects, and nuqs gives `layers` a fresh identity on every URL change.
-    layers.raw_zigzag,
-    layers.trendline,
-    layers.in_progress,
-    drillKey,
+    drawLayers,
+    drillPath,
+    applyDimming,
   ]);
 
   // Hover/isolation: dims the sub-wave layer only; the spine stays bold amber.
   // Isolating a root role brightens its subtree to full opacity and fades peers.
   // No-op for flat 5W scenarios (no nested sub-waves).
   useEffect(() => {
-    const hasActive = activeRole != null;
-    for (const { rootRole, series, baseColor } of subLegSeriesRef.current) {
-      const isActive = rootRole === activeRole;
-      series.applyOptions({
-        // 55=33% default dim, full when isolated, 22=13% for faded peers.
-        color: !hasActive ? `${baseColor}55` : isActive ? baseColor : `${baseColor}22`,
-        lineWidth: isActive ? 2 : 1,
-      });
-    }
-    // Mirror overlay-rebuild deps: re-apply dimming after subLegSeriesRef rebuilds.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    chartReady,
-    activeRole,
-    selectedScenario,
-    bars,
-    activePivots,
-    rawPivots,
-    compareScenario,
-    layers.raw_zigzag,
-    layers.trendline,
-    layers.in_progress,
-    drillKey,
-  ]);
+    applyDimming(activeRole);
+  }, [activeRole, applyDimming]);
 
   // Price lines on the candle series survive pan/zoom and align with the axis label.
   useEffect(() => {
@@ -505,7 +506,7 @@ function useChartOverlays({
     }
     const { leg, legIdx } = worst;
     const t0 = toUTC(leg.span_start.time);
-    const t1 = toUTC(leg.span_end!.time);
+    const t1 = toUTC(leg.span_end.time);
 
     const chart = chartRef.current;
     if (!chart) return;
@@ -628,6 +629,10 @@ export function useWaveChart({
 }: WaveChartParams): WaveChartApi {
   // Stable dep key — nuqs returns a fresh drillPath array each render.
   const drillKey = drillPath.join(".");
+  const stablePath = useMemo(
+    () => (drillKey === "" ? [] : drillKey.split(".").map(Number)),
+    [drillKey],
+  );
 
   const refs = useChartInstance(containerRef, scaleMode, bars, locale);
   const { chartRef, chartReady } = refs;
@@ -636,7 +641,7 @@ export function useWaveChart({
     chartRef,
     chartReady,
     selectedScenario,
-    drillPath,
+    drillPath: stablePath,
     drillKey,
     onDrill,
   });
@@ -649,8 +654,7 @@ export function useWaveChart({
     rawPivots,
     selectedScenario,
     compareScenario,
-    drillPath,
-    drillKey,
+    drillPath: stablePath,
     layers,
     layer1,
     activeRole,

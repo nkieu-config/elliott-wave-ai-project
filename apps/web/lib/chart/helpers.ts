@@ -1,7 +1,7 @@
 import type { SeriesMarker, Time, UTCTimestamp } from "lightweight-charts";
 import { gregorianLocale } from "../resolve-locale";
 import { drawableLegs, prettyFamilyUpper } from "../scenario-format";
-import type { Bar, Scenario, Wave } from "../types";
+import type { Bar, ClosedWave, Scenario, Wave } from "../types";
 
 // Pipeline sends tz-less ISO datetimes; force UTC so the calendar date is
 // identical for every viewer and matches the UTC axis. Honour an explicit
@@ -59,11 +59,11 @@ export interface PerLegEntry {
 export function resolveBottleneckLeg(
   scenario: Scenario,
   perLeg: PerLegEntry[],
-): { leg: Wave; legIdx: number } | null {
+): { leg: ClosedWave; legIdx: number } | null {
   if (perLeg.length === 0) return null;
   const worst = perLeg.reduce((best, e) => (e.ratio > best.ratio ? e : best), perLeg[0]);
   const leg = drawableLegs(scenario.root)[worst.leg_idx];
-  if (!leg?.span_start || !leg.span_end) return null;
+  if (!leg) return null;
   return { leg, legIdx: worst.leg_idx };
 }
 

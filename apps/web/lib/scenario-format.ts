@@ -1,4 +1,4 @@
-import type { SampleData, Scenario, Wave } from "./types";
+import type { ClosedWave, SampleData, Scenario, Wave } from "./types";
 
 // Family hues must not collide with the tier scale (down/warn/up). TREND uses
 // blue, not accent (=--color-up): a green badge would falsely read as bullish.
@@ -46,8 +46,10 @@ export function roleShort(role: string): string {
 
 // Drawable child legs (skip anchor, require span_end). Drill indices index into
 // THIS filtered array.
-export function drawableLegs(node: Wave): Wave[] {
-  return node.children.filter((c) => c.role !== "anchor" && c.span_end !== null);
+export function drawableLegs(node: Wave): ClosedWave[] {
+  return node.children.filter(
+    (c): c is ClosedWave => c.role !== "anchor" && c.span_end !== null,
+  );
 }
 
 // Null if any index is stale (caller falls back to root).
@@ -62,7 +64,7 @@ export function resolveScopeNode(scenario: Scenario, path: number[]): Wave | nul
 }
 
 // Invalid path falls back to root legs so the chart never goes blank.
-export function scopeLegs(scenario: Scenario, path: number[]): Wave[] {
+export function scopeLegs(scenario: Scenario, path: number[]): ClosedWave[] {
   const node = resolveScopeNode(scenario, path);
   return drawableLegs(node ?? scenario.root);
 }

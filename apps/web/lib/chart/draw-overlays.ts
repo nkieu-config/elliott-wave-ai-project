@@ -16,6 +16,11 @@ import type { ChartLayerKey } from "../chart-store";
 import { drawableLegs, isDrillable, roleShort, scopeLegs } from "../scenario-format";
 import type { Bar, Pivot, Scenario, Wave } from "../types";
 
+export type OverlayLayers = Pick<
+  Record<ChartLayerKey, boolean>,
+  "raw_zigzag" | "trendline" | "in_progress"
+>;
+
 export interface SubLegSeries {
   rootRole: string;
   series: ISeriesApi<"Line">;
@@ -79,7 +84,7 @@ export function drawOverlays(
     selectedScenario: Scenario | null;
     compareScenario: Scenario | null;
     drillPath: number[];
-    layers: Record<ChartLayerKey, boolean>;
+    layers: OverlayLayers;
   },
 ): OverlayResult {
   const overlays: ISeriesApi<"Line">[] = [];
@@ -146,8 +151,8 @@ export function drawOverlays(
       const spinePoints = [
         { time: toUTC(rLegs[0].span_start.time), value: rLegs[0].span_start.price },
         ...rLegs.map((l) => ({
-          time: toUTC(l.span_end!.time),
-          value: l.span_end!.price,
+          time: toUTC(l.span_end.time),
+          value: l.span_end.price,
         })),
       ];
       const deduped = dedupeByTime(spinePoints);
@@ -156,7 +161,6 @@ export function drawOverlays(
 
     // Role markers at root endpoints.
     for (const rootLeg of rLegs) {
-      if (!rootLeg.span_end) continue;
       const color = ROLE_COLOR[rootLeg.role] ?? "#94a3b8";
       const isHigh = rootLeg.span_end.kind === "high";
       markers.push({
@@ -173,7 +177,7 @@ export function drawOverlays(
     if (layers.trendline && selectedScenario.family.startsWith("5W")) {
       const s2 = rLegs.find((l) => l.role === "s2");
       const s4 = rLegs.find((l) => l.role === "s4");
-      if (s2?.span_end && s4?.span_end) {
+      if (s2 && s4) {
         const trendline = addLine(OVERLAY_STYLE.trendline);
         const lastBarTime = bars.length > 0 ? toUTC(bars[bars.length - 1].time) : null;
         const points = [
@@ -204,8 +208,8 @@ export function drawOverlays(
       const points = [
         { time: toUTC(cmpRootLegs[0].span_start.time), value: cmpRootLegs[0].span_start.price },
         ...cmpRootLegs.map((l) => ({
-          time: toUTC(l.span_end!.time),
-          value: l.span_end!.price,
+          time: toUTC(l.span_end.time),
+          value: l.span_end.price,
         })),
       ];
       const deduped = dedupeByTime(points);
@@ -214,7 +218,6 @@ export function drawOverlays(
 
     // Circles, not arrows, so they don't compete with the primary's markers.
     for (const rootLeg of cmpRootLegs) {
-      if (!rootLeg.span_end) continue;
       markers.push({
         time: toUTC(rootLeg.span_end.time),
         position: rootLeg.span_end.kind === "high" ? "aboveBar" : "belowBar",
