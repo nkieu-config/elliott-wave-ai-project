@@ -20,9 +20,9 @@ def test_chunk_extracts_page_number_and_body(tmp_path: Path):
 
 
 def test_chunk_against_real_theory_file():
-    real = Path("docs/elliott_wave_theory_en.md")
+    real = Path("analyst/theory/corpus/elliott_wave_theory_en.md")
     if not real.exists():
-        pytest.skip("docs/elliott_wave_theory_en.md not present — running outside repo")
+        pytest.skip(f"{real} not present — running outside repo")
     chunks = chunk_theory_file(real)
     pages = [c.page for c in chunks]
     assert len(chunks) >= 50

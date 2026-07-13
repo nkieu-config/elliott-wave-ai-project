@@ -1,5 +1,7 @@
 # Elliott Wave Lite
 
+> **This file is the RAG corpus, not project documentation.** The analyst chunks it by the `## Page N` markers ([`analyst/theory/chunker.py`](../analyst/theory/chunker.py)) and cites those page numbers in every AI reading. Editing anything from the first `## Page` marker down requires rebuilding the embedding index (`python -m analyst.theory.make_embeddings`) and keeping `analyst/theory/citation_map.py` in sync.
+
 ## Page 6
 
 The origin of price structure

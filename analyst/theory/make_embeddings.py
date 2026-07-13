@@ -11,7 +11,7 @@ import numpy as np
 from analyst.theory.chunker import Chunk, chunk_theory_file, enrich_aliases
 from analyst.theory.embedder import Embedder
 
-DEFAULT_THEORY = Path(__file__).resolve().parents[2] / "docs" / "elliott_wave_theory_en.md"
+DEFAULT_THEORY = Path(__file__).resolve().parent / "corpus" / "elliott_wave_theory_en.md"
 DEFAULT_OUT = Path(__file__).resolve().parent / "data"
 
 META_NAME = "corpus_meta.json"
