@@ -12,6 +12,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "gen:api-types": "openapi-typescript openapi.json -o lib/api-types.gen.ts",
     "profile": "vitest run --config vitest.profile.config.ts --reporter=verbose"
@@ -45,6 +46,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.1.7",
     "jsdom": "^29.1.1",
