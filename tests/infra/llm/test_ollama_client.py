@@ -3,7 +3,11 @@ import threading
 import httpx
 import pytest
 
-from infra.llm.ollama_client import OllamaClient
+from infra.llm.ollama_client import (
+    _DEFAULT_FALLBACK_MODEL,
+    _DEFAULT_PRIMARY_MODEL,
+    OllamaClient,
+)
 
 _HI = [{"role": "user", "content": "hi"}]
 
@@ -165,8 +169,8 @@ def test_default_models_when_no_arg_and_no_env(monkeypatch):
     monkeypatch.delenv("OLLAMA_PRIMARY_MODEL", raising=False)
     monkeypatch.delenv("OLLAMA_FALLBACK_MODEL", raising=False)
     c = OllamaClient(ollama_module=_FakeOllamaModule())
-    assert c.primary_model == "qwen3-next:80b-cloud"
-    assert c.fallback_model == "qwen3.5:9b"
+    assert c.primary_model == _DEFAULT_PRIMARY_MODEL
+    assert c.fallback_model == _DEFAULT_FALLBACK_MODEL
 
 
 def test_timeout_passed_to_cloud_and_local_clients(monkeypatch):

@@ -13,7 +13,7 @@ logger = logging.getLogger("infra.llm.ollama_client")
 DEFAULT_CLOUD_HOST = "https://ollama.com"
 DEFAULT_LOCAL_HOST = "http://localhost:11434"
 
-_DEFAULT_PRIMARY_MODEL = "qwen3-next:80b-cloud"
+_DEFAULT_PRIMARY_MODEL = "gpt-oss:120b"
 _DEFAULT_FALLBACK_MODEL = "qwen3.5:9b"
 
 # Large num_ctx so long RAG prompts aren't truncated; fixed seed stabilises narration.
@@ -29,7 +29,7 @@ _DEFAULT_LOCAL_TIMEOUT_S = 60.0
 _DEFAULT_MAX_RETRIES = 1
 _DEFAULT_RETRY_BACKOFF_BASE_S = 0.5
 
-# Gate concurrent cloud calls: the 80b cloud model 429s ("too many concurrent
+# Gate concurrent cloud calls: the cloud model 429s ("too many concurrent
 # requests") or stalls past the timeout when all modes fire at once. 1 = serialise.
 _DEFAULT_CLOUD_CONCURRENCY = 1
 
