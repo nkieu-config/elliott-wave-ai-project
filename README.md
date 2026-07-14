@@ -39,10 +39,10 @@ _Senior Project · Department of Computer Science, Thammasat University_
 
 1. The default chart loads with the top-ranked wave count already overlaid. **Click any wave label** to drill into its sub-waves.
 2. Open a scenario's **score breakdown** to see exactly which structural rule is its weakest link — every count comes with a per-rule pass/fail trail.
-3. Open **AI Reading** and watch four lenses (Structure / Outlook / Risk / Alternative) stream in — every claim carries a theory-page citation you can inspect.
+3. Open **AI Reading** and watch four lenses (Structure / Outlook / Risk / Alternative) stream in — each theory claim carries a page citation you can inspect, and the schema makes citing an unretrieved page impossible.
 
 > [!NOTE]
-> The demo runs on free tiers (frontend on Vercel, API on Render), so the first request after the API idles can take up to a minute to wake, and the first analysis of a not-yet-cached symbol fetches live market data before it renders. **Ask** (free-form theory Q&A) needs a ~440MB embedding model that doesn't fit the free tier — [run the stack locally](#quick-start) to try it.
+> The demo runs on free tiers (frontend on Vercel, API on Render), so expect some waiting on a cold path: the API takes up to a minute to wake after it idles, the first analysis of a not-yet-cached symbol fetches live market data before it renders, and an uncached **AI Reading** takes **around two minutes** for all four lenses — they stream in parallel and each appears the moment it lands, but `gpt-oss:120b` is genuinely slow at this length. Cached readings return instantly. **Ask** (free-form theory Q&A) needs a ~440MB embedding model that doesn't fit the free tier — [run the stack locally](#quick-start) to try it.
 
 > [!IMPORTANT]
 > **Not financial advice.** This is an educational / research project. Wave counts are algorithmic hypotheses and the AI narration is auto-generated — nothing here is investment advice.
@@ -71,7 +71,7 @@ flowchart LR
     B --> C[Beam-search<br/>wave counter]
     C --> D[Rule verifiers<br/>+ scoring]
     D --> E[(Scenarios<br/>ranked)]
-    E --> L1[Layer-1<br/>deterministic diagnostics]
+    E --> L1[Deterministic diagnostics<br/>Layer-1]
     L1 --> F[LLM narration<br/>+ RAG + grounding gates]
     E --> G[Interactive<br/>dashboard]
     F --> G
@@ -89,9 +89,9 @@ flowchart LR
 
 Because every number the narration mentions must appear verbatim in the deterministic layer, **the chart, the count, the confidence score, and the AI's explanation all trace back to something you can verify.**
 
-Want to see it on a real chart first? **[docs/examples.md](docs/examples.md)** walks four of them — a nested count, a fully-verified rule trail, a chart the engine scores at 0.0009, and 45 years of AAPL it refuses to count at all.
+Want to see it on a real chart first? **[docs/examples.md](docs/examples.md)** walks through four of them — a nested count, a fully-verified rule trail, a chart the engine scores at 0.0009, and 45 years of AAPL it refuses to count at all.
 
-Full deep-dive — beam-search design, scoring model, the five anti-hallucination layers, caching strategy, SSE streaming: **[docs/architecture.md](docs/architecture.md)**.
+Full deep-dive — beam-search design, scoring model, the five grounding gates, caching strategy, SSE streaming: **[docs/architecture.md](docs/architecture.md)**.
 
 ## Feature tour
 
@@ -100,7 +100,7 @@ Full deep-dive — beam-search design, scoring model, the five anti-hallucinatio
 | **Wave engine**       | ATR-adaptive ZigZag pivots, 500-wide beam search over a recursive wave grammar, explicit per-rule pass/fail verifiers, Gann-band degree gating                                         |
 | **Scenario explorer** | Ranked wave hypotheses with score breakdowns, weakest-link bottleneck callout, side-by-side comparison of what separates the top counts                                                |
 | **Interactive chart** | Wave overlay with click-to-drill into sub-waves, Fibonacci / confirmation / invalidation price lines, log-linear toggle, zoom preserved across re-renders                              |
-| **AI Reading**        | Four narration lenses (Structure / Outlook / Risk / Alternative) streamed in parallel over SSE, every claim cited to a theory page                                                     |
+| **AI Reading**        | Four narration lenses (Structure / Outlook / Risk / Alternative) streamed over SSE, each theory claim cited to a corpus page it was actually retrieved from                            |
 | **Ask**               | `/`-hotkey free-form Elliott Wave Q&A over the 98-page theory corpus, with citation chips and an out-of-scope gate that refuses off-topic questions — [self-hosted only](#quick-start) |
 | **Shareable state**   | Selected scenario, drill path, compare mode, and chart layers all live in the URL — sharing a link reproduces the exact chart configuration                                            |
 | **Data layer**        | yfinance fetch with retry, parquet cache with per-timeframe TTLs and an LRU byte budget                                                                                                |
@@ -118,7 +118,8 @@ Full deep-dive — beam-search design, scoring model, the five anti-hallucinatio
 
 ## Engineering decisions I'd defend in an interview
 
-- **The LLM is never allowed to compute** — every target, invalidation level, and risk figure comes from a deterministic diagnostics layer; the LLM only narrates that block, and five independent gates verify it did exactly that. The same honesty reaches the UI: streamed narration skips the typewriter effect for cache hits and reports real LLM wall time, so the interface never fakes a live model.
+- **The LLM is never allowed to compute** — every target, invalidation level, and risk figure comes from a deterministic diagnostics layer (Layer-1); the LLM only narrates that block, and five grounding gates verify it did exactly that.
+- **The UI never pretends the model is live** — streamed narration skips the typewriter effect for cache hits and reports real LLM wall time, so the interface never fakes a streaming model.
 - **Citing an unretrieved page is structurally impossible** — the JSON schema's citation field is generated per-request as an enum of only the pages the retriever actually supplied. The constraint acts at decode time, not as an after-the-fact check.
 - **Weakest-link scoring over weighted sums** — each hypothesis scores as the minimum of its structural and visual slots, the same way a human analyst discards a count with a single fatal flaw instead of averaging it away.
 - **Measured performance work, not guessed** — profiling found `copy.deepcopy` at 94% of beam-search wall time; targeted shallow cloning, `slots=True` dataclasses (100k+ allocations per long chart), and a hot/verbose scoring split are what keep it interactive. Today the longest chart in the demo set — AAPL weekly, 2,379 bars back to 1980 — analyzes cold in **~3.1s**, and its memoized repeat in **~2ms** (Apple M4, cached bars, beam width 500).
@@ -176,7 +177,15 @@ uv run uvicorn apps.api.main:app --reload --port 8000
 cd apps/web && npm install && npm run dev
 ```
 
-The full local guide — usage walkthrough, [calling the API directly](docs/development.md#calling-the-api-directly), testing, environment-variable reference, directory tree: **[docs/development.md](docs/development.md)**.
+Prefer the raw engine output? One call returns the ranked scenarios, their rule trails, and the deterministic diagnostics as JSON:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/pipeline \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"AAPL","timeframe":"day","period":"2y"}'
+```
+
+The full local guide — usage walkthrough, [calling the API directly](docs/development.md#calling-the-api-directly) (with real response shapes), testing, environment-variable reference, directory tree: **[docs/development.md](docs/development.md)**.
 
 <details>
 <summary><b>Troubleshooting</b> — the five things that actually go wrong</summary>
@@ -197,7 +206,7 @@ The full local guide — usage walkthrough, [calling the API directly](docs/deve
 
 ## Testing & quality
 
-**1,147 Python** (pytest, mirroring the source structure: per-verifier, per-scoring-slot, per-diagnostic, plus parity tests that pin engine/gate/web behavior to each other) and **171 web** (Vitest: chart helpers, SSE parsing, narration stream, stores).
+The suite splits into **1,147 Python tests** (pytest — per-verifier, per-scoring-slot, per-diagnostic, mirroring the source structure, plus parity tests that pin engine, gate, and web behavior to each other) and **171 web tests** (Vitest — chart helpers, SSE parsing, narration stream, stores).
 
 Two coverage gates run in CI. Python branch coverage is **gated at ≥75% (actual ≈92%)** across the whole source tree. The web gate is **≥78% on the logic modules** — `lib/` plus the non-component helpers — which is where the frontend's logic deliberately lives; the React components themselves are presentational and are not counted in that denominator.
 
@@ -222,12 +231,12 @@ On push to `main`, Vercel rebuilds the frontend and Render rebuilds the API imag
 
 - **1 minute** — watch the 40-second GIF at the top, then click the [live demo](https://elliott-wave-web.vercel.app).
 - **5 minutes** — [docs/examples.md](docs/examples.md): real engine output on four charts, including the one it scores near-zero and the one it refuses to count at all.
-- **15 minutes** — [docs/architecture.md](docs/architecture.md): how the beam search, the scoring model, and the five anti-hallucination layers actually work. It opens with [the eight files worth reading](docs/architecture.md#where-to-start-reading), if you'd rather go straight to the code.
+- **15 minutes** — [docs/architecture.md](docs/architecture.md): how the beam search, the scoring model, and the five grounding gates actually work. It opens with [the eight files worth reading](docs/architecture.md#where-to-start-reading), if you'd rather go straight to the code.
 - **Interviewing me** — [docs/tradeoffs.md](docs/tradeoffs.md): every decision above, the alternative it beat, and what the measurement said.
 
 | Doc                                     | What's inside                                                                      |
 | --------------------------------------- | ---------------------------------------------------------------------------------- |
-| [architecture.md](docs/architecture.md) | Deep dive: engine internals, anti-hallucination design, caching, streaming, web UI |
+| [architecture.md](docs/architecture.md) | Deep dive: engine internals, the grounding gates, caching, streaming, web UI       |
 | [examples.md](docs/examples.md)         | Real output on four charts — the good, the low-confidence, and the empty result    |
 | [development.md](docs/development.md)   | Local setup, testing, env vars, deploying to Vercel + Render, security checklist   |
 | [tradeoffs.md](docs/tradeoffs.md)       | Every design decision, the alternative it beat, and the cost it carries            |
@@ -238,7 +247,7 @@ Deliberate scope choices for a portfolio-scale deployment — each with its full
 
 - **The LLM can never improve the count, only explain it.** Auditability was chosen over end-to-end learning: a neural counter might read ambiguous charts better, but it would forfeit the per-rule pass/fail trail that is this project's whole point.
 - **The output is auditable, not benchmarked.** There is no labeled dataset of "correct" wave counts to score against — expert analysts disagree on the same chart, which is the premise the project starts from. What I can show is that the system is honest about its own confidence: [examples.md](docs/examples.md) walks through a chart it scores at **0.0009** and one where it returns **no count at all**, and explains why each is the right answer.
-- **"Every claim cites theory" is a structural guarantee, not a semantic one.** No claim can cite a page that wasn't retrieved; whether the page's _content_ supports the claim is checked only by an opt-in advisory embedding pass, off in the default deployment.
+- **Citations are a structural guarantee, not a semantic one — and they attach to theory claims only.** The schema types every sentence as either a `data_observation` (a number that must appear verbatim in the deterministic layer) or a `theory_claim` (which must cite a retrieved page), so citing a page the retriever never supplied is impossible. Two honest consequences: a lens whose draft comes back as data observations only will show no citation chips at all, and whether a cited page's _content_ genuinely supports the claim is checked only by an opt-in advisory embedding pass, off in the default deployment.
 - **Single-process caches, one worker.** The parquet, LLM-response, and wave-count caches live in-process — simple and correct for the deployment's single worker. Scaling out needs Redis; the seams are already behind interfaces.
 - **yfinance is the sole data source** — unofficial and best-effort, but key-free for a demo, and hidden behind a `BarSource` Protocol so a licensed feed can replace it without touching the engine.
 - **No app-level auth or rate limiting** — the demo's real risk is cost, not access, so it's bounded by CORS, a force-refresh guard, and caching rather than a login wall between a reviewer and the thing they came to see. Anything past a demo audience wants a rate limiter in front — see the [security checklist](docs/development.md#security-checklist).
@@ -257,7 +266,7 @@ The theory this implements, and the load-bearing pieces of the stack:
 
 Built solo by [Natthachak (@nkieu-config)](https://github.com/nkieu-config) — engine, analyst, API, frontend, tests, CI, and deployment.
 
-📫 natthachak.config@gmail.com
+📫 natthachak.config@gmail.com · [LinkedIn](https://www.linkedin.com/in/natthachak) · [GitHub](https://github.com/nkieu-config)
 
 | Project info     |                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------- |

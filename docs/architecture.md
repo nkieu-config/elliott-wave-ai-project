@@ -7,6 +7,7 @@ anti-hallucination defenses, the API layer, and the web dashboard.
 
 ## Contents
 
+- [Goals and non-goals](#goals-and-non-goals)
 - [Where to start reading](#where-to-start-reading)
 - [System overview](#system-overview)
 - [Symbolic core (`engine/`)](#symbolic-core-engine)
@@ -18,10 +19,22 @@ anti-hallucination defenses, the API layer, and the web dashboard.
 - [Performance engineering](#performance-engineering)
 - [Testing & architecture discipline](#testing--architecture-discipline)
 
+## Goals and non-goals
+
+**Goals.** Wave counts that are auditable (per-rule pass/fail, inspectable scoring); every number a
+user sees computed deterministically; LLM narration that is structurally prevented from inventing
+figures or citations.
+
+**Non-goals.** Predicting markets or producing trading signals; benchmarked count accuracy — no
+labeled ground truth exists, see
+[tradeoffs.md](tradeoffs.md#count-quality-is-auditable-not-benchmarked); multi-worker scale-out
+(single-worker by design, with the seams behind interfaces); improving the count with the LLM
+(auditability was chosen over end-to-end learning).
+
 ## Where to start reading
 
 If you'd rather read the code than a description of it, these eight files are the ones worth your
-time — in an order where each builds on the last, and with what to look for once you're there.
+time — ordered so each builds on the last, with a note on what to look for in each.
 
 1. **[`engine/pipeline.py`](../engine/pipeline.py)** — the whole system on one page. The count
    cache keys on pivot identity *plus a digest of the bar OHLC data*, so revised price data can
@@ -56,7 +69,7 @@ flowchart LR
     B --> C[Beam-search<br/>wave counter]
     C --> D[Rule verifiers<br/>+ scoring]
     D --> E[(Scenarios<br/>ranked)]
-    E --> L1[Layer-1<br/>deterministic diagnostics]
+    E --> L1[Deterministic diagnostics<br/>Layer-1]
     L1 --> F[LLM narration<br/>+ RAG + grounding gates]
     E --> G[Interactive<br/>dashboard]
     F --> G
@@ -88,7 +101,7 @@ Pipeline entry: [`engine/pipeline.py`](../engine/pipeline.py). Flow:
 [`engine/pivot.py`](../engine/pivot.py) finds alternating high/low pivots where the reversal
 threshold adapts per-bar to volatility:
 
-```
+```text
 threshold(i) = max(atr_multiplier × ATR[i] / close[i], floor_threshold)
 ```
 
@@ -217,8 +230,10 @@ adapter lives in [`infra/llm/ollama_client.py`](../infra/llm/ollama_client.py), 
   curated set of transport/API exceptions triggers failover — programming errors surface as bugs.
   Both models are overridable per deployment; the current defaults are listed in the
   [environment-variable reference](development.md#environment-variables).
-- A `BoundedSemaphore` serializes concurrent cloud calls (four narration modes firing at once
-  reliably drew 429s from the cloud endpoint).
+- A `BoundedSemaphore` bounds concurrent cloud calls (`OLLAMA_CLOUD_CONCURRENCY`, default 1). The
+  conservative default exists because a stricter API key can answer parallel calls with 429s, which
+  would trip the failover path and degrade the reading rather than merely slow it. The hosted demo
+  runs 4 in flight — see the measured [latency note](development.md#environment-variables).
 - Bounded timeouts (the client library's default of `None` freezes the UI), exponential-backoff
   retry, fixed seed + low temperature for reproducible narration.
 
@@ -325,6 +340,9 @@ Where it lands today (Apple M4, cached bars, `BEAM_WIDTH = 500`, defaults elsewh
 The repeat column is the wave-count LRU (keyed on pivot identity + config) — re-analysis without a
 data change never re-runs the beam.
 
+Bar counts drift as new bars arrive; [examples.md](examples.md) snapshots the same charts as of
+2026-07-06, so its counts can differ by a bar or two from this table.
+
 Documented, measured optimizations on the beam-search hot path:
 
 - `copy.deepcopy` in hypothesis cloning measured at **94% of wall time** — replaced with targeted
@@ -351,7 +369,7 @@ Documented, measured optimizations on the beam-search hot path:
 - **Enforced layering** — [`import-linter`](https://import-linter.readthedocs.io) makes the
   architecture a CI failure, not a convention. One `layers` contract pins the whole stack:
 
-  ```
+  ```text
   apps  →  infra  →  analyst  →  engine
   ```
 

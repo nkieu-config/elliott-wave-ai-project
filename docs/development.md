@@ -61,14 +61,14 @@ cp .env.example .env
 
 Edit `.env` and add your Ollama Cloud API key:
 
-```
+```dotenv
 OLLAMA_API_KEY=<your key from https://ollama.com/settings/keys>
 ```
 
 The frontend calls `http://localhost:8000` by default, so no extra setup is needed for local
 development. To point it at a different API, create `apps/web/.env.local` (git-ignored):
 
-```
+```dotenv
 NEXT_PUBLIC_API_URL=https://your-api-host
 ```
 
@@ -89,12 +89,12 @@ npm run dev
 
 Then open your browser:
 
-- **Dashboard:** http://localhost:3000
-- **API docs (Swagger UI):** http://localhost:8000/docs
+- **Dashboard:** <http://localhost:3000>
+- **API docs (Swagger UI):** <http://localhost:8000/docs>
 
 ## Using the dashboard
 
-1. Open http://localhost:3000 — the app loads a default view (symbol `DDOG`, weekly, max range).
+1. Open <http://localhost:3000> — the app loads a default view (symbol `DDOG`, weekly, max range).
    The first load fetches live data from yfinance and caches it under `data/` automatically;
    subsequent loads read from the cache and appear instantly.
 2. Choose a **symbol / period / timeframe** to fetch and re-analyze. Any symbol not yet cached is
@@ -115,7 +115,7 @@ Then open your browser:
 ## Calling the API directly
 
 Everything the dashboard does is one of four POST routes. Interactive docs (dev only) live at
-http://localhost:8000/docs; the shapes below are trimmed from real responses.
+<http://localhost:8000/docs>; the shapes below are trimmed from real responses.
 
 **Analyze a chart** — `POST /api/v1/pipeline`. Only `symbol` / `timeframe` / `period` are usually
 needed; every detector and scoring knob has a default (see [`PipelineRequest`](../apps/api/schemas.py)).
@@ -159,6 +159,10 @@ curl -s -X POST http://localhost:8000/api/v1/pipeline \
 The full body also carries every bar, pivot, and all 52 scenarios (~380KB for this request) — the
 chart draws from it without a second call. Score values shift as new bars arrive; see
 [examples.md](examples.md) for the same chart walked through end to end.
+
+**Layer-1 for any scenario** — `POST /api/v1/scenario/layer1`. The `/pipeline` response already
+embeds the deterministic diagnostics for the top scenario; this returns the same block for any
+other `scenario_id`, which is what the UI calls when you select a different count.
 
 **Stream a narration** — `POST /api/v1/analyst/stream` (SSE). `mode` is the wire name of a lens:
 `explanation` (Structure) / `outlook` / `risk` / `differentiator` (Alternative). Needs an
@@ -218,6 +222,7 @@ Python 3.11 + 3.12 matrix, and `tsc` + `eslint` + `next build` + `vitest` — se
 | `OLLAMA_API_KEY`            | analyst | _(required for AI)_     | Ollama Cloud API key                                                                                                 |
 | `OLLAMA_PRIMARY_MODEL`      | analyst | `gpt-oss:120b`          | Primary model (cloud)                                                                                                |
 | `OLLAMA_FALLBACK_MODEL`     | analyst | `qwen3.5:9b`            | Fallback model (local Ollama), used if the cloud call fails                                                          |
+| `OLLAMA_CLOUD_CONCURRENCY`  | analyst | `1`                     | Cloud calls in flight at once. At `1`, the four narration lenses run one at a time — see the note below              |
 | `ANALYST_QA`                | analyst | _(off)_                 | Set to `1` to enable the **Ask** theory Q&A (embedding retrieval; requires `uv sync --extra api --extra grounding`)  |
 | `ANALYST_GROUNDING_CHECK`   | analyst | _(off)_                 | Set to `1` to enable the semantic grounding check (requires the `grounding` extra, pulls ~440MB torch)               |
 | `EWL_API_CORS_ORIGINS`      | api     | _(dev regex)_           | Comma-separated allowlist of origins for production                                                                  |
@@ -233,9 +238,30 @@ DSNs — also read from the environment; see
 [`ollama_client.py`](../infra/llm/ollama_client.py),
 [`logging_config.py`](../engine/logging_config.py), and `apps/web/sentry.*.config.ts`.
 
+**On narration latency.** The dashboard requests all four AI Reading lenses at once, and
+`OLLAMA_CLOUD_CONCURRENCY` decides whether the client actually issues them in parallel or queues them
+behind a semaphore. The code default is `1` — the conservative choice, since a stricter API key can
+answer parallel calls with rate-limit rejections, and those trip the failover path and degrade the
+reading rather than just slowing it down. Raise it only once you have checked that your key tolerates
+concurrent calls.
+
+The hosted demo runs `OLLAMA_CLOUD_CONCURRENCY=4`. Measured cold (uncached NET weekly, four lenses
+issued together against the deployed API):
+
+| Setting                      | Wall time for all four lenses                    |
+| ---------------------------- | ------------------------------------------------ |
+| `OLLAMA_CLOUD_CONCURRENCY=1` | ~200s — four ~50s lenses, one after another      |
+| `OLLAMA_CLOUD_CONCURRENCY=4` | **115s** — wall ≈ the slowest single lens (109s) |
+
+The speedup is real but sub-linear, and the reason is worth knowing: under four concurrent requests
+the per-lens generation time itself stretches (30s / 72s / 97s / 109s, against ~50s when a lens has
+the model to itself), because Ollama Cloud's free tier shares throughput rather than capping
+connections. Parallelism removes the queueing, not the contention. Each lens still streams the moment
+it lands, and cached readings return immediately.
+
 ## Directory tree
 
-```
+```text
 elliott-wave-ai-project/
 ├── README.md                     # Project overview (start here)
 ├── pyproject.toml                # Python package definition + dependencies (managed by uv)
@@ -304,6 +330,10 @@ Deploy the repository root (`.`) as a Docker Web Service, pointing to `apps/api/
     without rebuilding the image; leave them unset to take the defaults listed in the
     [environment-variable reference](#environment-variables). Ollama Cloud has retired a default
     model before, and this is the escape hatch when it happens again.
+  - `OLLAMA_CLOUD_CONCURRENCY=4` — what the hosted demo runs, so the four narration lenses overlap
+    instead of queueing (measured: 115s cold, against ~200s serialized — see the
+    [latency note](#environment-variables)). Leave it unset to take the safe default of `1` unless
+    you have confirmed your key tolerates parallel calls.
 
 The API fails fast at startup if `EWL_ENV=production` is set without a CORS allowlist — the
 permissive dev regex must never serve production traffic.

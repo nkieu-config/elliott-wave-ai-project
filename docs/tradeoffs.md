@@ -129,13 +129,19 @@ an auth proxy in front — see the [security checklist](development.md#security-
 
 ## Known limitations
 
-### "Every claim cites theory" is a structural guarantee, not a semantic one
+### Citations are a structural guarantee, not a semantic one — and only theory claims carry them
 
 Cited pages are constrained to a per-request whitelist of actually-retrieved pages (an enum at
 decode time, plus a gate re-check), so no claim can cite a page that wasn't fetched. Whether that
 page's _content_ actually supports the claim is checked only by an opt-in advisory embedding pass,
 which is off in the default deployment (it needs the `grounding` extra — ~440MB of torch, well over
 Render's free-tier 512MB).
+
+The typing is also what decides which sentences get a citation chip at all. Every sentence is either
+a `data_observation` — a number that must appear verbatim in the Layer-1 block — or a `theory_claim`,
+which must cite a retrieved page; only the latter produces a chip. A lens whose draft comes back as
+data observations alone therefore renders with no citations, which is correct behavior (there is no
+theory assertion to source) but reads as a gap if the UI is expected to cite everything.
 
 So: the count is fully verifiable; the narration's grounding is best-effort. Those are different
 strengths of claim and the project should not be read as making the stronger one.
@@ -154,7 +160,8 @@ as canonical, and they await confirmation against the original before being trea
 
 The synchronous LLM call runs behind `asyncio.to_thread` with no global request deadline, so a
 burst of slow cloud calls can saturate the thread pool. Fine at demo scale, where a semaphore
-already serializes cloud calls to avoid 429s.
+already bounds cloud concurrency (`OLLAMA_CLOUD_CONCURRENCY` — the hosted demo runs four calls in
+flight, so a single reading occupies four pool threads for its duration).
 
 **Fixing it would mean:** a bounded executor plus an overall request timeout — small, but untested
 under load I haven't generated, so it isn't in.
