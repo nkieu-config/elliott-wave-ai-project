@@ -86,7 +86,7 @@ export function ResizableWorkspace() {
         </ErrorBoundary>
       </Panel>
       <ResizeHandle />
-      <Panel id="chart" defaultSize={55} minSize={35} order={2}>
+      <Panel id="chart" defaultSize={54} minSize={35} order={2}>
         <ErrorBoundary context="Chart">
           <ChartShell />
         </ErrorBoundary>
@@ -98,7 +98,7 @@ export function ResizableWorkspace() {
         ref={rightRef}
         collapsible
         collapsedSize={COLLAPSED_SIZE}
-        defaultSize={27}
+        defaultSize={26}
         minSize={20}
         maxSize={40}
         onCollapse={() => setRightCollapsed(true)}
